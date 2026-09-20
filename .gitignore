@@ -1,0 +1,94 @@
+# Environment variables and local secrets
+.env
+.env.*
+!.env.example
+*.secret
+*.secrets
+secrets/
+credentials/
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Python caches, virtual environments, and local tooling
+__pycache__/
+*.pyc
+*.py[cod]
+*$py.class
+.Python
+.venv/
+venv/
+env/
+ENV/
+pip-wheel-metadata/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.hypothesis/
+.tox/
+.nox/
+.coverage
+.coverage.*
+htmlcov/
+
+# Jupyter and notebook runtime files
+.ipynb_checkpoints/
+
+# Node.js and frontend build output
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.npm/
+.yarn/cache/
+.yarn/install-state.gz
+.pnp.*
+dist/
+build/
+out/
+coverage/
+
+# General logs and local runtime output
+*.log
+logs/
+tmp/
+temp/
+*.pid
+*.pid.lock
+
+# Local datasets, caches, generated reports, and experiment artifacts
+data/raw/
+data/processed/
+data/cache/
+cache/
+artifacts/
+outputs/
+reports/generated/
+*.sqlite
+*.sqlite3
+*.db
+
+# Model weights and other large generated files
+*.bin
+*.safetensors
+*.pt
+*.pth
+*.ckpt
+*.onnx
+*.gguf
+*.pkl
+*.pickle
+*.joblib
+
+# Editor, operating system, and local service files
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.idea/
+.vscode/
+*.swp
+*.swo
