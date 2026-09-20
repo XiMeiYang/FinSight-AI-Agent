@@ -8,6 +8,108 @@
 
 建议将原始资料与证据快照、结构化业务记录、检索索引分开管理；具体存储方案待数据规模与部署预算明确后确定。
 
+## 六层数据架构（建议方案，未冻结）
+
+为保持来源、计算和生成内容可追溯，建议把数据链路拆成六层。各层是逻辑边界，不代表已经创建数据库或部署服务。
+
+1. **采集层**：数据源适配器、限流、超时、重试和原始响应登记；记录供应商、请求时间和状态。
+2. **规范化层**：证券映射、时间统一为 UTC、币种/单位标准化、公司行动和交易日历处理；保留原始字段与版本。
+3. **事实与证据层**：保存行情、财报、公告、新闻和宏观事实，以及 `source`、`event_time`、`published_at`、`retrieved_at`、`as_of`、`freshness`、许可和定位信息。
+4. **分析层**：确定性指标、事件特征、缺失/冲突检查和 Point-in-Time 过滤；只读截止时点前可用数据。
+5. **检索与记忆层**：文档分块、关键词/向量索引、RRF/Reranker 结果、任务上下文和历史判断；索引记录数据版本及权限。
+6. **服务与交付层**：报告、图表、K线和 Excel 导出、通知、审计日志与复盘结果；输出始终引用保存的数据快照。
+
+建议的 MVP 选型是 PostgreSQL 作为结构化事实、权限和任务状态的主存储，pgvector 作为同库向量检索扩展，便于事务、权限和证据版本保持一致。TimescaleDB、独立向量库或对象存储仍是候选；只有在数据规模、检索延迟、备份恢复、许可或运维成本的实测结果显示 PostgreSQL+pgvector 不足时，才评估迁移。该选型未冻结、未安装、未连接数据库。
+
+```mermaid
+flowchart LR
+  A[外部来源] --> B[采集层]
+  B --> C[规范化层]
+  C --> D[事实与证据层]
+  D --> E[分析层]
+  D --> F[检索与记忆层]
+  E --> G[服务与交付层]
+  F --> G
+```
+
+## 系统、数据流与 RAG 图（建议方案）
+
+```mermaid
+flowchart TB
+  U[用户/定时任务] --> API[API 与权限]
+  API --> ORCH[任务编排与路由]
+  ORCH --> AD[数据适配器]
+  ORCH --> RAG[RAG 检索]
+  ORCH --> CALC[确定性计算]
+  AD --> STORE[(PostgreSQL + pgvector 建议选型)]
+  RAG --> STORE
+  CALC --> STORE
+  ORCH --> AG[多 Agent / 风控 / 证据审计]
+  AG --> REPORT[报告与图表]
+  REPORT --> STORE
+  REPORT --> OUT[系统内查看/邮件/Excel]
+```
+
+```mermaid
+flowchart LR
+  DOC[已保存文档] --> PARSE[解析与分块]
+  PARSE --> BM25[BM25]
+  PARSE --> EMB[Embedding 向量]
+  BM25 --> RRF[RRF 融合]
+  EMB --> RRF
+  RRF --> RE[重排]
+  RE --> PIT[权限与 Point-in-Time 过滤]
+  PIT --> EVID[证据包与定位]
+  EVID --> ANSWER[带引用回答/报告]
+```
+
+## 初步数据表与更新策略
+
+以下是内部表的初步设计，字段和索引待契约测试后调整：
+
+| 表 | 关键字段 | 更新策略 |
+| --- | --- | --- |
+| `securities` | `security_id`, `ticker`, `exchange`, `currency`, `valid_from/to` | 主数据变更追加版本，不覆盖历史映射 |
+| `market_bars` | `security_id`, `interval`, OHLCV, `event_time`, `source`, `retrieved_at` | 按来源和时间幂等写入，修订保留版本 |
+| `documents` / `evidence_chunks` | 文档定位、公开时间、首次可用时间、内容哈希、向量 | 原文或版本变化追加，重建索引记录版本 |
+| `facts` | 指标、数值、单位、币种、`as_of`、来源 | 规范化结果可重算，缺失与冲突显式保存 |
+| `analysis_runs` / `judgments` | 用户、任务、截止时间、状态、模型/工具版本 | 状态机更新，原判断不可被复盘覆盖 |
+| `reports` / `exports` | 报告快照、字段清单、导出格式、数据版本 | 保存后不可变；导出记录文件摘要和来源 |
+
+行情按正常交易时段依据来源允许频率采集；收盘报告先确认数据到齐再生成；文档、公司行动和宏观数据按发布或更正事件增量更新。每次任务计算 `freshness`，源延迟、采集周期和检测延迟分开显示。允许范围内的 5–15 分钟行情延迟不自动判故障，超过新鲜度上限、关键数据缺失或来源失败则降级。
+
+## 失败降级、K线与 Excel 接口
+
+适配器遇到限流、超时或来源中断时执行有限重试和退避；仍失败则标记 `failed` 或 `partial`，保留已成功来源和缺失原因。关键证据缺失时报告状态为 `evidence_insufficient`，禁止生成确定性结论。通知失败仍保存系统内报告；任务恢复沿用幂等键和 `run_id`，不重复告警或导出。
+
+建议接口（路径和字段未冻结）包括 `GET /securities/{id}/bars?interval=1d&from=&to=&adjusted=` 返回带来源、时间、币种、单位和复权口径的 K 线；`POST /reports/{id}/exports` 生成 `xlsx` 导出任务，`GET /exports/{id}` 查询状态和文件摘要。Excel 必须从已保存的报告/事实/证据快照导出，不能由 LLM 临时生成或补写数字。每个数值列及元数据应包含来源、事件/公开/采集时间、币种、单位、延迟/新鲜度和缺失或冲突说明。
+
+### P0 应用接口契约草案（建议，未冻结）
+
+为让 P0 闭环可直接进入原型和 PoC，先定义与 PRD 功能编号对应的最小接口；具体路径、鉴权方式和字段仍需契约测试确认：
+
+| PRD | 方法与路径（草案） | 关键输入 | 关键输出/失败状态 |
+| --- | --- | --- | --- |
+| F01 | `GET /securities/search?q=&market=US` | 查询词、市场 | 候选证券、匹配状态；`empty`/`failed` |
+| F02–F05 | `POST /analysis-runs`、`GET /analysis-runs/{run_id}` | `security_id`、`as_of`、任务类型 | 阶段状态、事实/计算/推断/风险、引用；`partial`/`evidence_insufficient`/`failed` |
+| F06 | `GET /reports/{report_id}` | 报告 ID、用户权限 | 不可覆盖报告快照、数据版本、来源和限制；`404`/`forbidden` |
+| F07 | `POST /watchlist`、`DELETE /watchlist/{security_id}` | 用户、证券和最小配置 | 保存/删除状态；`duplicate`/`forbidden` |
+| F08 | `POST /close-reports`、`GET /close-reports/{report_id}` | 用户、交易日 | 收盘摘要和逐股报告；`partial`/`stale`/`failed` |
+| F09/F11 | `GET /runs/{run_id}/events`、`GET /deliveries/{id}` | 运行或投递 ID | 耗时、Token/成本依据、通知状态；`retryable`/`failed` |
+
+所有 P0 接口均需透传 `source`、`as_of`、`retrieved_at`、freshness、数据版本和用户隔离上下文；缺失字段必须表达原因，不能用默认零值代替。接口只描述候选契约，当前未实现、未连接服务。
+
+## PoC 清单（未执行）
+
+1. 用标记为 synthetic 的离线样本验证六层字段、权限隔离、缺失/冲突和 Point-in-Time 过滤。
+2. 对 PostgreSQL+pgvector 建议选型测试结构化查询、向量检索、备份恢复和索引重建；与轻量替代方案比较，不预先宣称性能。
+3. 验证 SEC 文档定位、BM25+向量+RRF 检索和引用覆盖，包含截止时间边界。
+4. 验证 K线接口的时区、公司行动、缺口和延迟状态。
+5. 验证 Excel 导出字段完整性、来源元数据、缺失值表达、幂等和权限。
+6. 验证限流、超时、重试、任务恢复、重复事件及部分完成状态。
+
+以上 PoC 尚未运行；本阶段不安装依赖、不连接 API 或数据库。
+
 ## 分析流水线
 
 1. Router/Planner（意图识别与任务规划角色）解析用户问题、证券、时间范围与会话记忆，按复杂度安排必要角色；综合研究由行情、基本面、新闻事件、行业与宏观 Agent 取得有时间戳的数据与文档，覆盖行情、技术面、基本面、新闻情绪、行业、宏观和风险。

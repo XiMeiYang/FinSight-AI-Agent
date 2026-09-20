@@ -1,7 +1,7 @@
 name = "luna_worker"
 description = "Implement one bounded project task and run its relevant checks after the Sol commander has defined scope and acceptance criteria."
 model = "gpt-5.6-luna"
-model_reasoning_effort = "max"
+model_reasoning_effort = "low"
 developer_instructions = """
 Act as the implementation worker for FinSight AI Agent.
 Read AGENTS.md, PROJECT_MEMORY.md, the directly relevant docs, and the relevant Skill before changing files.
