@@ -10,7 +10,7 @@ FinSight = Finance + Sight，意为“金融洞察”。定位为个人投资者
 
 ## 当前状态
 
-项目已完成文档初始化、官方竞品案头调研和 PRD V1.0/P0-P2 优先级整理。尚无可运行系统、依赖配置、API 连接或实验结果。本仓库中的架构、流程和竞品记录是后续开发依据，不能视为已实现能力、实测结果或真实用户需求验证。
+项目已完成文档初始化、官方竞品案头调研、PRD V1.0/P0-P2 优先级整理和可点击 Web 原型。原型仅用于流程演示，尚无可运行业务系统、依赖配置、API 连接或实验结果。本仓库中的架构、流程、竞品记录和原型均不能视为真实数据能力、实测结果或真实用户需求验证。
 
 ## 已确定的产品范围
 
@@ -36,6 +36,7 @@ FinSight = Finance + Sight，意为“金融洞察”。定位为个人投资者
 | [竞品分析](docs/03-competitive-analysis.md) | 官方资料竞品矩阵、TradingAgents 分析和证据边界 |
 | [竞品证据目录](docs/research/competitors/) | Yahoo Finance、TradingView、FinChat、Koyfin、OpenBB、TradingAgents 的逐项官方链接与核验记录 |
 | [PRD V1.0](docs/04-prd.md) | P0/P1/P2 优先级、演示闭环、状态、输入输出和验收条件 |
+| [原型设计](docs/10-prototype-design.md) | 可点击原型的信息架构、Mock 边界和可用性测试任务 |
 | [技术方案](docs/05-technical-design.md) | 逻辑架构、Agent 协作与任务可靠性 |
 | [数据源方案](docs/06-data-sources.md) | 数据需求、选型门槛和溯源规范 |
 | [评测方案](docs/07-evaluation.md) | 质量评估、安全测试和复盘口径 |
@@ -62,6 +63,6 @@ FinSight = Finance + Sight，意为“金融洞察”。定位为个人投资者
 
 能力定位：数据分析是主轴，技术是基础，产品能力是加分项，AI Agent 是差异化优势。开发者背景、PRD 优先级和已确认决策见 PROJECT_MEMORY.md；痛点、优先级价值和竞品差异属于待验证假设，候选技术未冻结。
 
-任务前阅读 AGENTS.md、PROJECT_MEMORY.md、相关 docs 和 Skill。项目文件是 ChatGPT 与本地 Codex 的共享记忆。当前未完成真实访谈、API 测试、原型、业务代码及自动测试、真实评测、Beta 或部署；竞品官方案头调研和 PRD 优先级整理已完成，但不等于产品实测或用户验证，不以规划冒充成果。
+任务前阅读 AGENTS.md、PROJECT_MEMORY.md、相关 docs 和 Skill。项目文件是 ChatGPT 与本地 Codex 的共享记忆。当前未完成真实访谈、API 测试、业务代码及自动测试、真实评测、Beta 或部署；可点击原型已完成，但不等于业务系统、产品实测或用户验证，不以规划冒充成果。
 
 后续代码任务使用 Sol 指挥、Luna Max 执行、独立 Sol 验收。项目已配置 GitHub `origin` 和任务完成后自动提交推送规则；每次是否同步成功以实际 push 输出和 commit ID 为准。竞品调研证据文件只代表截至 2026-09-20 的官方公开资料，功能、价格和版本变化后需要重新核验。
