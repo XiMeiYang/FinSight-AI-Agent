@@ -10,7 +10,7 @@ FinSight = Finance + Sight，意为“金融洞察”。定位为个人投资者
 
 ## 当前状态
 
-项目已完成文档初始化和一轮基于官方公开资料的竞品案头调研。尚无可运行系统、依赖配置、API 连接或实验结果。本仓库中的架构、流程和竞品记录是后续开发依据，不能视为已实现能力、实测结果或真实用户需求验证。
+项目已完成文档初始化、官方竞品案头调研和 PRD V1.0/P0-P2 优先级整理。尚无可运行系统、依赖配置、API 连接或实验结果。本仓库中的架构、流程和竞品记录是后续开发依据，不能视为已实现能力、实测结果或真实用户需求验证。
 
 ## 已确定的产品范围
 
@@ -35,7 +35,7 @@ FinSight = Finance + Sight，意为“金融洞察”。定位为个人投资者
 | [用户痛点](docs/02-user-pain-points.md) | 用户假设、场景与验证计划 |
 | [竞品分析](docs/03-competitive-analysis.md) | 官方资料竞品矩阵、TradingAgents 分析和证据边界 |
 | [竞品证据目录](docs/research/competitors/) | Yahoo Finance、TradingView、FinChat、Koyfin、OpenBB、TradingAgents 的逐项官方链接与核验记录 |
-| [PRD](docs/04-prd.md) | 功能需求、用户流程与验收条件 |
+| [PRD V1.0](docs/04-prd.md) | P0/P1/P2 优先级、演示闭环、状态、输入输出和验收条件 |
 | [技术方案](docs/05-technical-design.md) | 逻辑架构、Agent 协作与任务可靠性 |
 | [数据源方案](docs/06-data-sources.md) | 数据需求、选型门槛和溯源规范 |
 | [评测方案](docs/07-evaluation.md) | 质量评估、安全测试和复盘口径 |
@@ -56,12 +56,12 @@ FinSight = Finance + Sight，意为“金融洞察”。定位为个人投资者
 
 ## 建议下一步
 
-[用户痛点验证计划](docs/02-user-pain-points.md)已准备好，包含提问与空白记录模板。竞品官方资料调研已完成，但没有替代真实用户研究。下一步找一位最近研究过美股或读过财报的人，收集一次真实任务经历作为初步验证；暂不开始业务开发。完整后续顺序见 [开发计划](docs/08-development-plan.md)。
+[用户痛点验证计划](docs/02-user-pain-points.md)和 [PRD V1.0](docs/04-prd.md) 已准备好。竞品官方资料调研和优先级整理已完成，但没有替代真实用户研究。下一步找一位最近研究过美股或读过财报的人，收集一次真实任务经历作为初步验证；暂不开始业务开发。完整后续顺序见 [开发计划](docs/08-development-plan.md)。
 
 ## 阅读与协作
 
-能力定位：数据分析是主轴，技术是基础，产品能力是加分项，AI Agent 是差异化优势。开发者背景与已确认决策见 PROJECT_MEMORY.md；痛点和竞品差异属于待验证假设，候选技术未冻结。
+能力定位：数据分析是主轴，技术是基础，产品能力是加分项，AI Agent 是差异化优势。开发者背景、PRD 优先级和已确认决策见 PROJECT_MEMORY.md；痛点、优先级价值和竞品差异属于待验证假设，候选技术未冻结。
 
-任务前阅读 AGENTS.md、PROJECT_MEMORY.md、相关 docs 和 Skill。项目文件是 ChatGPT 与本地 Codex 的共享记忆。当前未完成真实访谈、API 测试、原型、业务代码及自动测试、真实评测、Beta 或部署；竞品官方案头调研已完成，但不等于产品实测或用户验证，不以规划冒充成果。
+任务前阅读 AGENTS.md、PROJECT_MEMORY.md、相关 docs 和 Skill。项目文件是 ChatGPT 与本地 Codex 的共享记忆。当前未完成真实访谈、API 测试、原型、业务代码及自动测试、真实评测、Beta 或部署；竞品官方案头调研和 PRD 优先级整理已完成，但不等于产品实测或用户验证，不以规划冒充成果。
 
 后续代码任务使用 Sol 指挥、Luna Max 执行、独立 Sol 验收。项目已配置 GitHub `origin` 和任务完成后自动提交推送规则；每次是否同步成功以实际 push 输出和 commit ID 为准。竞品调研证据文件只代表截至 2026-09-20 的官方公开资料，功能、价格和版本变化后需要重新核验。
