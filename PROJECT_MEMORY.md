@@ -165,6 +165,8 @@ Codex 应主动 cue（提示并带领）后续流程：持续记录当前阶段�
 
 已完成：文档初始化、本轮文档合并、官方公开资料竞品案头调研、可点击原型、SEC EDGAR/Company Facts 离线 PoC 及固定 fixture 测试。真实原型可用性测试、真实用户访谈、竞品产品实测、实时 SEC/API 测试、技术栈冻结、业务代码、部署、真实评测和 Beta 测试仍未完成。文档检查和 fixture 测试不等于在线业务测试。五份 Skill 是仓库源文件，不代表已安装到 Codex；Git 版本记录需在仓库实际启用后核验，不能宣称已提交。
 
+SEC Live PoC 请求路由修复已完成离线验证：company tickers 使用 `www.sec.gov/files/company_tickers.json`，Submissions 和 Company Facts 使用 `data.sec.gov`；请求元数据、重试计数、gzip 和重定向白名单均已覆盖测试。真实 SEC 联网请求仍未执行。
+
 ## 已确认：Codex 多代理与 GitHub 协作
 
 - 后续代码任务和高风险改动采用“Sol 拆解 → Luna 低推理执行与自测 → 独立 Sol 低推理验收 → 修复与复验”的工作流。简单问答、只读任务和极小文档改动不强制调用整套编制，以节省 Token。

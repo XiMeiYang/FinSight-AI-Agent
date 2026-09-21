@@ -4,10 +4,11 @@ sys.path.insert(0, str(Path(__file__).parents[1] / "src"))
 from finsight_sec.client import SECClient, SECConfig, SECError, SECRequestError
 
 class Response:
-    def __init__(self, data): self.data=data
+    def __init__(self, data, url=None, status=200, headers=None): self.data=data; self.url=url; self.status=status; self.headers=headers or {}
     def __enter__(self): return self
     def __exit__(self,*a): pass
     def read(self): return self.data
+    def geturl(self): return self.url or "https://data.sec.gov/x"
 
 class TestSEC(unittest.TestCase):
     def setUp(self): self.sleep=[]
@@ -29,7 +30,7 @@ class TestSEC(unittest.TestCase):
             if len(calls)==1: raise HTTPError(req.full_url,429,"",{},None)
             return Response(b'{"values":{}}')
         c=SECClient(SECConfig(user_agent="test test@example.com",sleep=lambda n:self.sleep.append(n),min_interval_seconds=0,max_retries=1),opener)
-        self.assertEqual(c._get_json("/x")[0],{"values":{}}); self.assertEqual(len(calls),2)
+        self.assertEqual(c._get_json("/x")[0],{"values":{}}); self.assertEqual(len(calls),2); self.assertEqual(c.request_metadata[-1]["retry_reason"], "rate_limited")
     def test_raw_download_preserves_bytes_and_hash(self):
         c=SECClient(SECConfig(user_agent="test test@example.com",min_interval_seconds=0),lambda req,timeout: Response(b"<html>raw</html>"))
         raw,digest=c.download_raw("https://www.sec.gov/Archives/example.htm"); self.assertEqual(raw,b"<html>raw</html>"); self.assertEqual(digest,c.raw_sha256(raw))
@@ -70,6 +71,27 @@ class TestSEC(unittest.TestCase):
         c=SECClient(SECConfig(user_agent="test test@example.com",min_interval_seconds=0),lambda req,timeout: Response(b"bad"))
         with self.assertRaises(SECRequestError) as cm: c._get_json("/x")
         self.assertEqual(cm.exception.category,"invalid_payload")
+    def test_ticker_mapping_uses_www_sec_host(self):
+        seen=[]
+        def opener(req, timeout):
+            seen.append(req.full_url); return Response(b'{"0":{"ticker":"AAPL","cik_str":320193}}', "https://www.sec.gov/files/company_tickers.json")
+        c=SECClient(SECConfig(user_agent="test test@example.com",min_interval_seconds=0), opener)
+        self.assertEqual(c.ticker_to_cik("AAPL"), "0000320193"); self.assertEqual(seen[0], "https://www.sec.gov/files/company_tickers.json")
+    def test_identity_encoding_and_request_metadata(self):
+        seen=[]
+        def opener(req, timeout):
+            seen.append(req.headers.get("Accept-encoding")); return Response(b'{"ok":true}', "https://data.sec.gov/x", headers={"Content-Encoding":"identity"})
+        c=SECClient(SECConfig(user_agent="test test@example.com",min_interval_seconds=0), opener)
+        c._get_json("/x"); m=c.request_metadata[-1]
+        self.assertEqual(seen, ["identity"]); self.assertEqual(m["final_url"], "https://data.sec.gov/x"); self.assertEqual(m["http_status"], 200); self.assertGreaterEqual(m["elapsed_ms"], 0); self.assertEqual(m["content_encoding"], "identity"); self.assertEqual(m["attempt_count"], 1); self.assertEqual(m["retry_count"], 0)
+    def test_redirect_outside_allowlist_is_blocked(self):
+        c=SECClient(SECConfig(user_agent="test test@example.com",min_interval_seconds=0), lambda req, timeout: Response(b'{}', "https://example.com/x"))
+        with self.assertRaises(SECRequestError) as cm: c._get_json("/x")
+        self.assertEqual(cm.exception.category, "blocked_url")
+    def test_gzip_response_is_decoded(self):
+        import gzip
+        c=SECClient(SECConfig(user_agent="test test@example.com",min_interval_seconds=0), lambda req, timeout: Response(gzip.compress(b'{"ok":true}'), "https://data.sec.gov/x", headers={"Content-Encoding":"gzip"}))
+        self.assertEqual(c._get_json("/x")[0], {"ok":True})
     def test_save_payloads_idempotent_and_separated(self):
         import tempfile
         with tempfile.TemporaryDirectory() as d:

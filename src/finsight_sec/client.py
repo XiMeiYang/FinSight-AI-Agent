@@ -1,12 +1,12 @@
 """SEC EDGAR client with explicit network policy and deterministic normalization."""
 from __future__ import annotations
-import hashlib, json, logging, os, time
+import hashlib, json, logging, os, time, gzip
 from pathlib import Path
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Callable, Iterable, Mapping, Optional
 from urllib.error import HTTPError, URLError
-from urllib.parse import quote
+from urllib.parse import quote, urlparse
 from urllib.request import Request, urlopen
 
 from .models import CompanyFacts, Fact, Filing, NormalizedFact
@@ -38,6 +38,7 @@ class SECClient:
         self._opener = opener
         self._last_request = 0.0
         self.attempts_total = 0
+        self.request_metadata = []
 
     def _require_agent(self):
         if not self.config.user_agent or "@" not in self.config.user_agent:
@@ -50,35 +51,52 @@ class SECClient:
         url = path if path.startswith("http") else self.config.base_url.rstrip("/") + "/" + path.lstrip("/")
         if not self._sec_url(url):
             raise SECRequestError("SEC URL allowlist rejected request", category="blocked_url", retryable=False)
-        request = Request(url, headers={"User-Agent": self.config.user_agent, "Accept-Encoding": "gzip", "Host": url.split('/')[2]})
+        request = Request(url, headers={"User-Agent": self.config.user_agent, "Accept-Encoding": "identity"})
         attempts = self.config.max_retries + 1
+        retry_reason = None
         for attempt in range(attempts):
             self.attempts_total += 1
+            started = time.monotonic()
             self._last_request = time.monotonic()
             try:
                 with self._opener(request, timeout=self.config.timeout_seconds) as response:
                     raw = response.read()
-                return json.loads(raw.decode("utf-8")), raw, url
+                    final_url = response.geturl() if hasattr(response, "geturl") else url
+                    if not self._sec_url(final_url):
+                        self.request_metadata.append(self._metadata(url, final_url, getattr(response, "status", None), started, "identity", attempt + 1, "blocked_url"))
+                        raise SECRequestError("SEC redirect URL allowlist rejected request", category="blocked_url", retryable=False)
+                    status = getattr(response, "status", getattr(response, "code", None))
+                    headers = getattr(response, "headers", {})
+                    encoding = headers.get("Content-Encoding", "identity") if hasattr(headers, "get") else "identity"
+                    if str(encoding).lower() == "gzip": raw = gzip.decompress(raw)
+                meta = self._metadata(url, final_url, status, started, encoding, attempt + 1, retry_reason)
+                self.request_metadata.append(meta)
+                return json.loads(raw.decode("utf-8")), raw, final_url
             except HTTPError as exc:
                 status = exc.code
                 retryable = status == 429 or status >= 500
                 category = "rate_limited" if status == 429 else ("server_error" if status >= 500 else "http_error")
                 LOG.warning("sec_request_failed", extra={"event": "sec_request_failed", "status": status, "category": category, "attempt": attempt + 1})
                 if not retryable or attempt == attempts - 1:
+                    self.request_metadata.append(self._metadata(url, getattr(exc, "url", url), status, started, "identity", attempt + 1, category))
                     raise SECRequestError(f"SEC request failed with HTTP {status}", category=category, status=status, retryable=retryable) from exc
+                retry_reason = category
             except (TimeoutError, URLError) as exc:
                 if isinstance(exc, URLError) and not isinstance(exc.reason, TimeoutError): category = "network_error"
                 else: category = "timeout"
                 if attempt == attempts - 1:
+                    self.request_metadata.append(self._metadata(url, url, None, started, "identity", attempt + 1, category))
                     raise SECRequestError("SEC request failed", category=category, retryable=True) from exc
+                retry_reason = category
             except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+                self.request_metadata.append(self._metadata(url, url, None, started, "identity", attempt + 1, "invalid_payload"))
                 raise SECRequestError("SEC returned invalid JSON", category="invalid_payload") from exc
             self.config.sleep(min(2 ** attempt, 8))
         raise AssertionError("unreachable")
 
     def ticker_to_cik(self, ticker: str, mapping: Optional[Mapping[str, str]] = None) -> str:
         if mapping is None:
-            data, _, _ = self._get_json("/files/company_tickers.json")
+            data, _, _ = self._get_json("https://www.sec.gov/files/company_tickers.json")
             mapping = {str(v.get("ticker", "")).upper(): str(v["cik_str"]).zfill(10) for v in data.values()}
         cik = mapping.get(ticker.strip().upper())
         if not cik: raise SECError(f"Unknown SEC ticker: {ticker}")
@@ -98,21 +116,37 @@ class SECClient:
             raise SECRequestError("filing URL is outside SEC allowlist", category="blocked_url", retryable=False)
         wait = self.config.min_interval_seconds - (time.monotonic() - self._last_request)
         if wait > 0: self.config.sleep(wait)
-        request = Request(url, headers={"User-Agent": self.config.user_agent, "Accept-Encoding": "gzip"})
+        request = Request(url, headers={"User-Agent": self.config.user_agent, "Accept-Encoding": "identity"})
+        retry_reason = None
         for attempt in range(self.config.max_retries + 1):
             self.attempts_total += 1
+            started = time.monotonic()
             try:
                 self._last_request = time.monotonic()
                 with self._opener(request, timeout=self.config.timeout_seconds) as response:
                     raw = response.read()
+                    final_url = response.geturl() if hasattr(response, "geturl") else url
+                    if not self._sec_url(final_url):
+                        self.request_metadata.append(self._metadata(url, final_url, getattr(response, "status", None), started, "identity", attempt + 1, "blocked_url"))
+                        raise SECRequestError("SEC redirect URL allowlist rejected request", category="blocked_url", retryable=False)
+                    status = getattr(response, "status", getattr(response, "code", None))
+                    headers = getattr(response, "headers", {})
+                    encoding = headers.get("Content-Encoding", "identity") if hasattr(headers, "get") else "identity"
+                    if str(encoding).lower() == "gzip": raw = gzip.decompress(raw)
+                self.request_metadata.append(self._metadata(url, final_url, status, started, encoding, attempt + 1, retry_reason))
                 return raw, self.raw_sha256(raw)
             except HTTPError as exc:
                 category = "rate_limited" if exc.code == 429 else ("server_error" if exc.code >= 500 else "http_error")
                 retryable = exc.code == 429 or exc.code >= 500
                 if not retryable or attempt == self.config.max_retries:
+                    self.request_metadata.append(self._metadata(url, getattr(exc, "url", url), exc.code, started, "identity", attempt + 1, category))
                     raise SECRequestError(f"SEC filing download failed with HTTP {exc.code}", category=category, status=exc.code, retryable=retryable) from exc
+                retry_reason = category
             except (TimeoutError, URLError) as exc:
-                if attempt == self.config.max_retries: raise SECRequestError("SEC filing download failed", category="timeout", retryable=True) from exc
+                if attempt == self.config.max_retries:
+                    self.request_metadata.append(self._metadata(url, url, None, started, "identity", attempt + 1, "timeout"))
+                    raise SECRequestError("SEC filing download failed", category="timeout", retryable=True) from exc
+                retry_reason = "timeout"
             self.config.sleep(min(2 ** attempt, 8))
         raise AssertionError("unreachable")
 
@@ -147,8 +181,20 @@ class SECClient:
 
     @staticmethod
     def _sec_url(url: str) -> bool:
-        from urllib.parse import urlparse
         p=urlparse(url); return p.scheme == "https" and p.netloc.lower() in {"www.sec.gov", "sec.gov", "data.sec.gov"}
+
+    @staticmethod
+    def _metadata(requested_url, final_url, status, started, encoding, attempt, retry_reason):
+        elapsed_ms = round((time.monotonic() - started) * 1000, 3)
+        content_encoding = str(encoding or "identity")
+        return {"requested_url": requested_url, "final_url": final_url,
+                "http_status": status, "status": status,
+                "elapsed_ms": elapsed_ms,
+                "elapsed_seconds": elapsed_ms / 1000,
+                "content_encoding": content_encoding, "encoding": content_encoding,
+                "fetched_at": datetime.now(timezone.utc).isoformat(),
+                "attempt_count": attempt, "retry_count": max(0, attempt - 1),
+                "retry_reason": retry_reason}
 
     def save_payloads(self, *, cik: str, kind: str, raw: bytes, normalized: object, retrieved_at: str, root: str = ".local_data/sec") -> tuple[Path, Path]:
         base=Path(root); raw_dir=base/"raw"; norm_dir=base/"normalized"; raw_dir.mkdir(parents=True, exist_ok=True); norm_dir.mkdir(parents=True, exist_ok=True)
