@@ -117,7 +117,7 @@ Problem Discovery → 用户和痛点验证 → 竞品分析 → 用户访谈或
 
 ## 已确定：当前阶段与 Skill
 
-当前完成项目初始化、项目记忆、开发规范、PRD V1.0 整理、六层数据架构建议、技术方案、数据源方案、评测方案、开发计划、竞品案头调研、Skill 设计、原生 HTML/CSS/JavaScript 可点击原型、SEC 与 Alpha Vantage 各一次真实 live smoke，以及 n=3 真实线上语音访谈的匿名聚合。原型只用于流程演示和可用性测试，仍不直接实现完整业务系统；本轮不新增联网请求。首个可验证 MVP 闭环调整为“NVDA→保存日线→SEC→事实/来源→摘要展开→Excel→运行记录”；新闻仅保留接口位置，RAG 和多 Agent 未实现。Excel 导出从 P1 设计提前为该闭环的验证输出，但仍只能来自保存的数据快照。
+当前完成项目初始化、项目记忆、开发规范、PRD V1.0 整理、六层数据架构建议、技术方案、数据源方案、评测方案、开发计划、竞品案头调研、Skill 设计、原生 HTML/CSS/JavaScript 可点击原型、SEC 与 Alpha Vantage 各一次真实 live smoke，以及 n=3 真实线上语音访谈的匿名聚合。原型只用于流程演示和可用性测试，仍不直接实现完整业务系统；本轮不新增联网请求。首个可验证 MVP 闭环调整为“NVDA→保存日线→SEC→事实/来源→摘要展开→Excel→运行记录”；新闻仅保留接口位置，RAG 和多 Agent 未实现。基础 K 线预览和 Excel 导出预览纳入该闭环的验证输出，但仍只能来自保存的数据快照。
 
 保留五个标准化 Skill：stock-research、financial-rag、market-monitor、daily-report、agent-evaluation。Skill 文档不等于可运行 Agent，也不启动自动任务。
 
