@@ -117,7 +117,7 @@ Problem Discovery → 用户和痛点验证 → 竞品分析 → 用户访谈或
 
 ## 已确定：当前阶段与 Skill
 
-当前完成项目初始化、项目记忆、开发规范、PRD V1.0 整理、六层数据架构建议、技术方案、数据源方案、评测方案、开发计划、竞品案头调研、Skill 设计、原生 HTML/CSS/JavaScript 可点击原型、SEC 与 Alpha Vantage 各一次真实 live smoke。原型只用于流程演示和可用性测试，仍不直接实现完整业务系统；本轮请求安全修复不新增联网请求。K线与 Excel 导出列为 P1 设计；导出只能来自保存的数据快照。
+当前完成项目初始化、项目记忆、开发规范、PRD V1.0 整理、六层数据架构建议、技术方案、数据源方案、评测方案、开发计划、竞品案头调研、Skill 设计、原生 HTML/CSS/JavaScript 可点击原型、SEC 与 Alpha Vantage 各一次真实 live smoke，以及 n=3 真实线上语音访谈的匿名聚合。原型只用于流程演示和可用性测试，仍不直接实现完整业务系统；本轮不新增联网请求。首个可验证 MVP 闭环调整为“NVDA→保存日线→SEC→事实/来源→摘要展开→Excel→运行记录”；新闻仅保留接口位置，RAG 和多 Agent 未实现。Excel 导出从 P1 设计提前为该闭环的验证输出，但仍只能来自保存的数据快照。
 
 保留五个标准化 Skill：stock-research、financial-rag、market-monitor、daily-report、agent-evaluation。Skill 文档不等于可运行 Agent，也不启动自动任务。
 
@@ -165,7 +165,7 @@ ChatGPT 与本地 Codex 不自动共享全部聊天记录。AGENTS.md、本文�
 
 Codex 应主动 cue（提示并带领）后续流程：持续记录当前阶段和完成条件，在每项工作结束时只给一个最合适的下一步，并在已有授权范围内主动推进；不能用“主动推进”替代真实用户参与、外部账号权限或产品方向决策。
 
-已完成：文档初始化、本轮文档合并、官方公开资料竞品案头调研、可点击原型、SEC EDGAR/Company Facts 离线 PoC 及一次 SEC live smoke、Alpha Vantage 日线 PoC 及一次行情 live smoke、固定 fixture 测试。真实原型可用性测试、真实用户访谈、竞品产品实测、其他实时行情 API 测试、技术栈冻结、完整业务系统、部署、真实评测和 Beta 测试仍未完成。文档检查和 fixture 测试不等于在线业务测试；两次 smoke 也不代表生产稳定性。五份 Skill 是仓库源文件，不代表已安装到 Codex；Git 版本记录需在仓库实际启用后核验，不能宣称已提交。
+已完成：文档初始化、本轮文档合并、官方公开资料竞品案头调研、可点击原型、SEC EDGAR/Company Facts 离线 PoC 及一次 SEC live smoke、Alpha Vantage 日线 PoC 及一次行情 live smoke、固定 fixture 测试、n=3 真实线上语音访谈匿名聚合。真实原型可用性测试、竞品产品实测、其他实时行情 API 测试、技术栈冻结、完整业务系统、部署、真实评测和 Beta 测试仍未完成。文档检查和 fixture 测试不等于在线业务测试；两次 smoke 也不代表生产稳定性。五份 Skill 是仓库源文件，不代表已安装到 Codex；Git 版本记录需在仓库实际启用后核验，不能宣称已提交。
 
 SEC Live PoC 请求路由修复已完成离线验证：company tickers 使用 `www.sec.gov/files/company_tickers.json`，Submissions 和 Company Facts 使用 `data.sec.gov`；请求元数据、重试计数、gzip 和重定向白名单均已覆盖测试。已补充一次用户执行的 NVDA 真实联网 smoke，生产接入仍未完成。
 
@@ -187,7 +187,7 @@ SEC Live PoC 请求路由修复已完成离线验证：company tickers 使用 `w
 
 ## 当前推进记录：用户痛点验证准备
 
-2026-09-20：用户要求继续下一步，已在 [用户痛点与验证计划](docs/02-user-pain-points.md) 补充问题定义、初步验证顺序、建议招募对象、正式访谈提纲草案、空白记录模板与证据判断规则。这里只完成计划准备，未联系参与者、未进行访谈或问卷；竞品官方资料案头调研已完成，但不等于用户验证。
+已完成 [用户痛点与验证计划](docs/02-user-pain-points.md) 的匿名证据状态更新，并新增 [真实访谈聚合](docs/research/user-interview-synthesis-001.md)：n=3，朋友转介和相关学习社群，线上语音，完整记录与联系方式不入仓库。结论为小样本定性：信息分散、来源核查和可回看依据有初步支持；告警、投递、新闻归因和市场普遍性仍信息不足。下一步是原型可用性测试，不把访谈反馈当作效果指标。
 2026-09-20：完成 [PRD V1.0](docs/04-prd.md) 优先级整理，新增 P0 状态、输入输出、验收、风险降级和演示闭环；没有安装依赖、连接 API 或编写业务代码。
 2026-09-20：完成 [原型设计](docs/10-prototype-design.md) 与 `prototype/index.html` 原生可点击原型。原型使用明确标记的 Mock Data，覆盖搜索、分析执行、报告、自选股、收盘报告和 5/20 日复盘占位；未连接 API、未发送邮件、未实现 Agent/RAG，不代表业务系统已完成。浏览器交互测试需在本地浏览器继续验证。
 
