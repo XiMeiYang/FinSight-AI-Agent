@@ -57,7 +57,7 @@ FinSight = Finance + Sight，意为“金融洞察”。定位为个人投资者
 | [daily-report](skills/daily-report/SKILL.md) | 收盘报告、归档及投递流程 |
 | [agent-evaluation](skills/agent-evaluation/SKILL.md) | Agent 评测、历史复盘与结果审计 |
 
-这些 Skill 是项目内的工作流规范，尚未注册为运行时工具，也不会自动启动 Agent、监控、邮件或定时任务。当前无需安装或运行任何程序。
+这些 Skill 是项目内的工作流规范，尚未注册为运行时工具，也不会自动启动 Agent、监控、邮件或定时任务。当前仅运行离线检查与固定 fixture 测试，不连接新的外部服务。
 
 ## 建议下一步
 
@@ -69,6 +69,6 @@ SEC 适配器的离线边界验证和一次 NVDA 低频实时 smoke 已完成。
 
 能力定位：数据分析是主轴，技术是基础，产品能力是加分项，AI Agent 是差异化优势。开发者背景、PRD 优先级和已确认决策见 PROJECT_MEMORY.md；痛点、优先级价值和竞品差异属于待验证假设，候选技术未冻结。
 
-任务前阅读 AGENTS.md、PROJECT_MEMORY.md、相关 docs 和 Skill。项目文件是 ChatGPT 与本地 Codex 的共享记忆。当前未完成真实访谈、实时 API 测试、完整业务系统、真实评测、Beta 或部署；SEC PoC 的固定 fixture 自动测试已完成，可点击原型已完成但真实可用性测试尚未完成，不以规划冒充成果。
+任务前阅读 AGENTS.md、PROJECT_MEMORY.md、相关 docs 和 Skill。项目文件是 ChatGPT 与本地 Codex 的共享记忆。当前未完成真实访谈、完整业务系统、真实评测、Beta 或部署；SEC 与 Alpha Vantage 各已完成一次用户执行的 live smoke，本轮不新增联网请求。固定 fixture 自动测试已完成，可点击原型已完成但真实可用性测试尚未完成，不以规划冒充成果。
 
 后续代码任务使用 Sol 拆解、Luna 低推理执行、独立 Sol 低推理验收。项目已配置 GitHub `origin` 和任务完成后自动提交推送规则；每次是否同步成功以实际 push 输出和 commit ID 为准。竞品调研证据文件只代表截至 2026-09-20 的官方公开资料，功能、价格和版本变化后需要重新核验。

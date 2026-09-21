@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Callable, Optional
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode, urlparse
-from urllib.request import Request, urlopen
+from urllib.request import Request, build_opener, HTTPRedirectHandler, urlopen
 
 LOG = logging.getLogger("finsight.market")
 
@@ -36,7 +36,12 @@ class AlphaVantageConfig:
 
 class AlphaVantageClient:
     def __init__(self, config: Optional[AlphaVantageConfig] = None, opener: Callable = urlopen):
-        self.config = config or AlphaVantageConfig.from_environment(); self._opener = opener
+        self.config = config or AlphaVantageConfig.from_environment()
+        # The default opener uses a redirect handler that validates every Location
+        # before urllib sends the next request. Injected openers remain available
+        # for deterministic tests and are handled by the explicit loop below.
+        self._redirect_handler = _SafeRedirectHandler(self._allowed) if opener is urlopen else None
+        self._opener = opener if opener is not urlopen else build_opener(self._redirect_handler).open
         self.request_metadata = []
 
     def _require_key(self):
@@ -56,13 +61,36 @@ class AlphaVantageClient:
         request = Request(url, headers={"Accept": "application/json"})
         for attempt in range(self.config.max_retries + 1):
             started = time.monotonic()
+            current_url = url; redirect_count = 0
+            if self._redirect_handler is not None:
+                self._redirect_handler.redirect_count = 0
             try:
-                with self._opener(request, timeout=self.config.timeout_seconds) as response:
-                    raw = response.read(); status = getattr(response, "status", getattr(response, "code", None)); final = response.geturl()
-                if not self._allowed(final): raise MarketDataError("redirect outside allowlist", category="blocked_url")
+                while True:
+                    request = Request(current_url, headers={"Accept": "application/json"})
+                    with self._opener(request, timeout=self.config.timeout_seconds) as response:
+                        status = getattr(response, "status", getattr(response, "code", None)); final = response.geturl()
+                        location = response.headers.get("Location") if getattr(response, "headers", None) else None
+                        if status in {301, 302, 303, 307, 308} and location:
+                            from urllib.parse import urljoin
+                            next_url = urljoin(current_url, location)
+                            if redirect_count >= 3 or not self._allowed(next_url):
+                                raise MarketDataError("redirect outside allowlist or limit", category="blocked_url")
+                            redirect_count += 1; current_url = next_url; continue
+                        raw = response.read()
+                    if not self._allowed(final): raise MarketDataError("redirect outside allowlist", category="blocked_url")
+                    redirect_count += self._redirect_handler.redirect_count if self._redirect_handler is not None else 0
+                    break
                 payload = json.loads(raw.decode("utf-8"))
-                self.request_metadata.append(self._meta(url, final, status, started, attempt, None))
+                self.request_metadata.append(self._meta(url, final, status, started, attempt, None, redirect_count))
                 if "Error Message" in payload: raise MarketDataError("provider rejected request", category="provider_error")
+                if "Information" in payload:
+                    category = self._classify_information(payload.get("Information"))
+                    self.request_metadata[-1]["retry_reason"] = category
+                    if category == "rate_limited":
+                        err = MarketDataError("provider rate limit response", category=category, retryable=True)
+                        if attempt == self.config.max_retries: raise err
+                        self.config.sleep(min(2 ** attempt, 8)); continue
+                    raise MarketDataError("provider information response", category=category)
                 if "Note" in payload:
                     err = MarketDataError("provider rate limit response", category="rate_limited", retryable=True)
                     self.request_metadata[-1]["retry_reason"] = "rate_limited"
@@ -70,13 +98,16 @@ class AlphaVantageClient:
                     self.config.sleep(min(2 ** attempt, 8)); continue
                 if not any(k.startswith("Time Series") for k in payload): raise MarketDataError("daily series missing", category="empty_payload")
                 return {"raw": raw, "payload": payload, "metadata": self.request_metadata[-1], "symbol": symbol}
+            except _RedirectSecurityError as exc:
+                self.request_metadata.append(self._meta(url, exc.target_url, exc.status, started, attempt, "blocked_url", redirect_count))
+                raise MarketDataError("redirect outside allowlist or limit", category="blocked_url") from exc
             except HTTPError as exc:
                 retryable = exc.code == 429 or exc.code >= 500; category = "rate_limited" if exc.code == 429 else ("server_error" if exc.code >= 500 else "http_error")
-                self.request_metadata.append(self._meta(url, url, exc.code, started, attempt, category))
+                self.request_metadata.append(self._meta(url, url, exc.code, started, attempt, category, redirect_count))
                 if not retryable or attempt == self.config.max_retries: raise MarketDataError(f"provider HTTP {exc.code}", category=category, status=exc.code, retryable=retryable) from exc
             except (TimeoutError, URLError) as exc:
                 category = "timeout" if isinstance(exc, TimeoutError) or isinstance(getattr(exc, "reason", None), TimeoutError) else "network_error"
-                self.request_metadata.append(self._meta(url, url, None, started, attempt, category))
+                self.request_metadata.append(self._meta(url, url, None, started, attempt, category, redirect_count))
                 if attempt == self.config.max_retries: raise MarketDataError("provider request failed", category=category, retryable=True) from exc
             except (json.JSONDecodeError, UnicodeDecodeError) as exc:
                 raise MarketDataError("invalid provider JSON", category="invalid_payload") from exc
@@ -111,6 +142,15 @@ class AlphaVantageClient:
     def raw_sha256(raw: bytes) -> str: return hashlib.sha256(raw).hexdigest()
 
     @staticmethod
+    def _classify_information(value) -> str:
+        text = str(value).lower()
+        if any(term in text for term in ("rate limit", "frequency", "too many requests", "request limit", "minute limit")):
+            return "rate_limited"
+        if any(term in text for term in ("daily quota", "quota exceeded", "premium", "subscription", "upgrade", "entitlement")):
+            return "access_denied"
+        return "provider_information"
+
+    @staticmethod
     def save_payloads(*, symbol: str, raw: bytes, normalized: dict, retrieved_at: str, root: str = ".local_data/market"):
         base = Path(root); (base / "raw").mkdir(parents=True, exist_ok=True); (base / "normalized").mkdir(parents=True, exist_ok=True)
         stem = f"{symbol.upper()}_{retrieved_at.replace(':','').replace('+','_')}"; rp = base / "raw" / (stem + ".json"); np = base / "normalized" / (stem + ".json")
@@ -119,8 +159,28 @@ class AlphaVantageClient:
         return rp, np
 
     @staticmethod
-    def _allowed(url: str) -> bool: return urlparse(url).scheme == "https" and urlparse(url).netloc.lower() == "www.alphavantage.co"
+    def _allowed(url: str) -> bool:
+        try:
+            parsed = urlparse(url)
+            return (parsed.scheme == "https" and parsed.hostname == "www.alphavantage.co"
+                    and parsed.username is None and parsed.password is None
+                    and parsed.port in (None, 443))
+        except ValueError:
+            return False
     @staticmethod
-    def _meta(requested, final, status, started, attempt, reason):
+    def _meta(requested, final, status, started, attempt, reason, redirect_count=0):
         elapsed = round((time.monotonic() - started) * 1000, 3)
-        return {"requested_url": requested.split("apikey=")[0] + "apikey=[REDACTED]", "final_url": final.split("apikey=")[0] + "apikey=[REDACTED]", "http_status": status, "elapsed_ms": elapsed, "attempt_count": attempt + 1, "retry_count": attempt, "retry_reason": reason, "retrieved_at": datetime.now(timezone.utc).isoformat()}
+        return {"requested_url": requested.split("apikey=")[0] + "apikey=[REDACTED]", "final_url": final.split("apikey=")[0] + "apikey=[REDACTED]", "http_status": status, "elapsed_ms": elapsed, "attempt_count": attempt + 1, "retry_count": attempt, "redirect_count": redirect_count, "retry_reason": reason, "retrieved_at": datetime.now(timezone.utc).isoformat()}
+
+class _RedirectSecurityError(Exception):
+    def __init__(self, target_url, status):
+        self.target_url = target_url; self.status = status
+
+class _SafeRedirectHandler(HTTPRedirectHandler):
+    def __init__(self, allow, max_redirects=3):
+        super().__init__(); self.allow = allow; self.max_redirects = max_redirects; self.redirect_count = 0
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        if self.redirect_count >= self.max_redirects or not self.allow(newurl):
+            raise _RedirectSecurityError(newurl, code)
+        self.redirect_count += 1
+        return super().redirect_request(req, fp, code, msg, headers, newurl)

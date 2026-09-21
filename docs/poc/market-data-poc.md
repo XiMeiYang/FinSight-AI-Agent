@@ -22,3 +22,5 @@ PYTHONPATH=src python3 scripts/run_market_poc.py NVDA --network
 文件已生成：`.local_data/market/raw/NVDA_2026-09-21T135449.165880_0000.json` 和 `.local_data/market/normalized/NVDA_2026-09-21T135449.165880_0000.json`；`.local_data/` 已被 Git 忽略。未出现限速、超时或其他异常，API Key 在输出中保持 `[REDACTED]`。本次只验证日线，不能用于分钟级实时监控；成功不代表长期稳定性，Alpha Vantage 未冻结为生产供应商，K线前端和 Excel 导出尚未实现。
 
 官方支持页核验日期为 **2026-09-21**：[Alpha Vantage Support](https://www.alphavantage.co/support/)。页面通常说明免费股票 API 为每天 25 次请求，实时及 15 分钟延迟美股行情属于付费能力；本次账户实际表现优先于网页描述，但一次请求不能推断长期额度或稳定性。
+
+后续请求安全加固已通过离线测试：重定向逐跳校验 HTTPS、精确主机和端口，外域跳转在第二次请求前阻止，同域跳转有次数上限；`Information` 响应按短期频率限制、额度/套餐权限和未知信息保守分类，不进入正常行情规范化或保存。以上是请求安全修复，不是第二次真实联网测试。

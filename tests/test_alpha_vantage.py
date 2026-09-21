@@ -2,10 +2,10 @@ import json, sys, tempfile, unittest
 from pathlib import Path
 from urllib.error import HTTPError
 sys.path.insert(0, str(Path(__file__).parents[1] / "src"))
-from finsight_market.alpha_vantage import AlphaVantageClient, AlphaVantageConfig, MarketDataError
+from finsight_market.alpha_vantage import AlphaVantageClient, AlphaVantageConfig, MarketDataError, _SafeRedirectHandler, _RedirectSecurityError
 
 class Response:
-    def __init__(self, data, url="https://www.alphavantage.co/query", status=200): self.data=data; self.url=url; self.status=status
+    def __init__(self, data, url="https://www.alphavantage.co/query", status=200, headers=None): self.data=data; self.url=url; self.status=status; self.headers=headers or {}
     def __enter__(self): return self
     def __exit__(self,*a): pass
     def read(self): return self.data
@@ -43,6 +43,51 @@ class TestAlphaVantage(unittest.TestCase):
             calls.append(1); return Response(json.dumps({"Note":"slow"} if len(calls)==1 else self.fixture()).encode())
         c=AlphaVantageClient(AlphaVantageConfig(api_key="x",max_retries=1,sleep=lambda _:None),opener); c.fetch_daily("T")
         self.assertEqual(len(calls),2); self.assertEqual(c.request_metadata[0]["retry_reason"],"rate_limited")
+    def test_information_rate_limit_retries(self):
+        calls=[]
+        def opener(req,timeout):
+            calls.append(1); return Response(json.dumps({"Information":"frequency limit reached"} if len(calls)==1 else self.fixture()).encode())
+        c=AlphaVantageClient(AlphaVantageConfig(api_key="x",max_retries=1,sleep=lambda _:None),opener)
+        result=c.fetch_daily("T")
+        self.assertEqual(len(calls),2); self.assertEqual(c.request_metadata[0]["retry_reason"],"rate_limited"); self.assertEqual(result["metadata"]["http_status"],200)
+
+    def test_information_access_denied_without_retry(self):
+        calls=[]
+        def opener(req,timeout): calls.append(1); return Response(json.dumps({"Information":"daily quota exceeded; upgrade subscription"}).encode())
+        c=AlphaVantageClient(AlphaVantageConfig(api_key="x",max_retries=2,sleep=lambda _:None),opener)
+        with self.assertRaises(MarketDataError) as e: c.fetch_daily("T")
+        self.assertEqual(e.exception.category,"access_denied"); self.assertEqual(len(calls),1); self.assertNotIn("quota", str(e.exception).lower())
+
+    def test_information_unknown_without_retry(self):
+        calls=[]
+        def opener(req,timeout): calls.append(1); return Response(json.dumps({"Information":"service message"}).encode())
+        c=AlphaVantageClient(AlphaVantageConfig(api_key="x",max_retries=2,sleep=lambda _:None),opener)
+        with self.assertRaises(MarketDataError) as e: c.fetch_daily("T")
+        self.assertEqual(e.exception.category,"provider_information"); self.assertEqual(len(calls),1)
+    def test_redirect_is_checked_and_counted(self):
+        calls=[]
+        def opener(req,timeout):
+            calls.append(req.full_url)
+            if len(calls)==1: return Response(b"",status=302,headers={"Location":"https://www.alphavantage.co/query?x=1"})
+            return Response(json.dumps(self.fixture()).encode())
+        c=AlphaVantageClient(AlphaVantageConfig(api_key="x",max_retries=0),opener)
+        result=c.fetch_daily("T"); self.assertEqual(len(calls),2); self.assertEqual(result["metadata"]["redirect_count"],1)
+    def test_external_redirect_is_blocked_before_second_request(self):
+        calls=[]
+        def opener(req,timeout): calls.append(req.full_url); return Response(b"",status=302,headers={"Location":"https://example.com/steal"})
+        c=AlphaVantageClient(AlphaVantageConfig(api_key="x"),opener)
+        with self.assertRaises(MarketDataError) as e: c.fetch_daily("T")
+        self.assertEqual(e.exception.category,"blocked_url"); self.assertEqual(len(calls),1)
+    def test_allowlist_rejects_nonstandard_port(self):
+        self.assertFalse(AlphaVantageClient._allowed("https://www.alphavantage.co:8443/query")); self.assertTrue(AlphaVantageClient._allowed("https://www.alphavantage.co:443/query"))
+        self.assertFalse(AlphaVantageClient._allowed("https://user:pass@www.alphavantage.co/query"))
+        self.assertFalse(AlphaVantageClient._allowed("https://www.alphavantage.co:notaport/query"))
+    def test_safe_redirect_handler_blocks_external_without_followup(self):
+        handler = _SafeRedirectHandler(AlphaVantageClient._allowed)
+        request = __import__("urllib.request", fromlist=["Request"]).Request("https://www.alphavantage.co/query")
+        with self.assertRaises(_RedirectSecurityError):
+            handler.redirect_request(request, None, 302, "Found", {}, "https://example.com/steal")
+        self.assertEqual(handler.redirect_count, 0)
     def test_4xx_5xx_timeout_invalid_json_redirect(self):
         for exc,cat,retries in [(HTTPError("x",400,"",{},None),"http_error",1),(HTTPError("x",500,"",{},None),"server_error",2),(TimeoutError(),"timeout",2)]:
             calls=[]
@@ -63,7 +108,7 @@ class TestAlphaVantage(unittest.TestCase):
         p=self.fixture(); p["Time Series (Daily)"]={"2024-02-30":p["Time Series (Daily)"]["2024-01-02"]}
         with self.assertRaises(MarketDataError) as e: AlphaVantageClient.normalize(p,symbol="T")
         self.assertEqual(e.exception.category,"invalid_date")
-    def test_duplicate_date_and_runner_no_network(self):
+    def test_same_payload_date_replacement_and_runner_no_network(self):
         p=self.fixture(); p["Time Series (Daily)"]["2024-01-03"]=p["Time Series (Daily)"]["2024-01-02"]
         self.assertEqual(len(AlphaVantageClient.normalize(p,symbol="T")["rows"]), 2)
         import subprocess
