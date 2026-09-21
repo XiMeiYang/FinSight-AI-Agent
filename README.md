@@ -10,6 +10,8 @@ FinSight = Finance + Sight，意为“金融洞察”。定位为个人投资者
 
 ## 当前状态
 
+2026-09-21 已加入 Alpha Vantage `TIME_SERIES_DAILY` 离线日线 PoC，默认 compact；SEC live smoke 已完成，行情 live 尚未执行，未冻结生产供应商。
+
 项目已完成文档初始化、官方竞品案头调研、PRD V1.0/P0-P2 优先级整理、六层数据架构建议、可点击 Web 原型和 SEC EDGAR/Company Facts 离线数据源 PoC。当前仍无完整可运行业务系统、数据库连接或实验结果；已完成一次用户执行的 NVDA 低频实时 smoke；K线与 Excel 导出仍为 P1 设计。`.codex/` 中的 Sol/Luna 模型和 low 推理配置只影响支持项目配置的后续会话，不能视为当前会话已经切换。本仓库中的架构、流程、竞品记录和原型均不能视为真实数据能力、实测结果或真实用户需求验证。
 
 ## 已确定的产品范围
