@@ -40,6 +40,14 @@
 
 ## 分阶段接入
 
+### SEC EDGAR / Company Facts 离线 PoC
+
+仓库已提供标准库 SEC 适配器，覆盖 ticker→CIK、Submissions 申报筛选、归档 URL、Company Facts 规范化、`as_of` 过滤和原始响应 SHA-256。raw 与 normalized 分离，保留来源、时间、表单、accession number、单位和定位 URL。固定 synthetic fixture 仅用于离线验证，不代表 SEC 在线接口、额度、许可或生产数据质量已验证。
+
+官方资料核验（2026-09-21）：[EDGAR APIs](https://www.sec.gov/search-filings/edgar-application-programming-interfaces)；[Accessing EDGAR Data](https://www.sec.gov/search-filings/edgar-search-assistance/accessing-edgar-data)；[SEC rate control](https://www.sec.gov/filergroup/announcements-old/new-rate-control-limits)。代码生成的 filing URL 使用 SEC Archives 前缀，但该路径不是本核验链接。Company Facts 的 XBRL 边界、10 req/s 公平访问、User-Agent 和 CORS 限制均已记录；实时请求未执行。
+
+网络访问由 `FINSIGHT_SEC_USER_AGENT` 显式控制；未设置时拒绝请求。429/5xx 在有限预算内重试，超时、网络错误、4xx 和无效 JSON 返回结构化错误。PoC 不安装依赖、不连接数据库、不启动任务。
+
 先使用明确标记的 synthetic 样例测试边界，或使用许可允许且保留来源的历史样本；样例结果不得宣称真实有效。用户启动后续接入阶段后，再完成官方资料核验、许可及预算确认、凭证配置和小规模契约测试。只有实测过的数据质量和延迟才能标为已验证；供应商最终选择必须在真实 API 测试后才能冻结。根据实测额度再决定每用户自选股上限，不能现在写死数量。
 
 ## 降级与安全

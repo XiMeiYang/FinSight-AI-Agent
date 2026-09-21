@@ -85,6 +85,12 @@ reports/generated/
 
 # Editor, operating system, and local service files
 .DS_Store
+__pycache__/
+*.py[cod]
+.pytest_cache/
+data/raw/sec/
+data/normalized/sec/
+.local_data/
 .AppleDouble
 .LSOverride
 ._*
