@@ -58,7 +58,7 @@
 
 行情采集频率、源延迟和检测周期分别记录；正常交易时段内允许的 5–15 分钟延迟不自动判为故障。公司行动、财报更正和宏观修订采用追加版本，不能覆盖原始时点记录。每次报告、图表和导出都绑定数据版本与 `as_of` 截止时间。
 
-K线接口应返回 OHLCV、`event_time`、来源、币种、单位、复权口径、延迟/freshness 和缺失区间。Excel 导出只允许读取已保存的事实、计算、证据和报告快照；每列保留来源、事件/公开/采集时间、币种、单位、数据版本及缺失/冲突说明。LLM 不得临时生成或补写行情、财务数字。2026-09-21 新增 Alpha Vantage `TIME_SERIES_DAILY` 离线 PoC，默认 compact、显式 `--network` runner、环境变量 key、raw/normalized 与请求元数据；行情 live 尚未执行，不冻结生产。供应商对比见 [行情供应商调研](research/market-data-providers.md)。
+K线接口应返回 OHLCV、`event_time`、来源、币种、单位、复权口径、延迟/freshness 和缺失区间。Excel 导出只允许读取已保存的事实、计算、证据和报告快照；每列保留来源、事件/公开/采集时间、币种、单位、数据版本及缺失/冲突说明。LLM 不得临时生成或补写行情、财务数字。2026-09-21 新增 Alpha Vantage `TIME_SERIES_DAILY` PoC，默认 compact、显式 `--network` runner、环境变量 key、raw/normalized 与请求元数据；用户已完成一次 NVDA 日线 live smoke，但不冻结生产。供应商对比见 [行情供应商调研](research/market-data-providers.md)。
 
 ## Point-in-Time 数据要求
 
@@ -75,3 +75,6 @@ K线接口应返回 OHLCV、`event_time`、来源、币种、单位、复权口�
 ## RAG 材料范围
 
 包含 10-K 年报、10-Q 季报、8-K 重大事项公告、财报电话会文本、投资者关系材料、金融指标解释、历史研究报告及系统历史分析。各类来源与许可独立核验，不宣称 SEC 提供所有材料。数字必须能定位到原始文件、日期、页码/章节/表格；系统报告保留原引用与版本，不作为独立原始证据。
+
+
+2026-09-21：用户完成一次 Alpha Vantage NVDA 日线 live smoke（HTTP 200、1226.955 ms、100 条日线、0 次重试）。官方支持页（核验日期 2026-09-21）通常说明免费股票 API 为每天 25 次请求，实时与 15 分钟延迟美股行情属于付费能力：[Support](https://www.alphavantage.co/support/)。行情生产供应商仍未冻结。

@@ -146,7 +146,7 @@ MVP（最小可用版本）可先用可溯源离线样本验证单股研究，�
 
 ## 决策记录与维护
 
-- 2026-09-21：新增 Alpha Vantage 日线离线 PoC（默认 compact、显式 network runner、环境变量 key、raw/normalized 与脱敏请求元数据）；SEC live smoke 已完成，行情 live 尚未执行，Alpha Vantage 仅为 PoC 建议，不冻结生产供应商。
+- 2026-09-21：新增 Alpha Vantage 日线离线 PoC（默认 compact、显式 network runner、环境变量 key、raw/normalized 与脱敏请求元数据）；SEC live smoke 已完成，用户也完成一次 NVDA 日线 live smoke；Alpha Vantage 仅为 PoC 建议，不冻结生产供应商。
 
 - 2026-09-20：初次初始化确立美股分析、自选股、分钟监测、收盘报告、RAG、多 Agent、通知及复盘范围。
 - 2026-09-20：依据用户提供的已确认背景，补齐作品集目的、目标用户、12 个模块、10 个角色、完整 RAG 流程、6 项创新、数据来源规划及实施流程；取消“目标用户待确认”和“来源类别仅为建议”等旧表述，明确免费分钟级延迟为允许的产品模式。

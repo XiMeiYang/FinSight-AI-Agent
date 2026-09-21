@@ -10,3 +10,6 @@
 | Finnhub（[官方 API 文档](https://finnhub.io/docs/api)） | 官方资料列 symbol lookup、quote、股票 candle；分钟语义待实测 | 免费额度、频率、延迟、历史范围待核对 | API key；调整价和导出格式待实测 | 免费计划及展示/缓存限制待核对 | 备选 |
 
 所有供应商的免费层、延迟、历史长度、许可及再分发范围均可能随套餐或条款变化；本文件不把网页宣传转述为已验证能力。当前只实现 Alpha Vantage `TIME_SERIES_DAILY` 离线契约，默认不联网；无 key 或未显式启用 runner 时安全停止。
+
+
+Alpha Vantage 于 2026-09-21 完成一次 NVDA 日线 live smoke；Massive、FMP 和 Finnhub 未执行 live 请求。官方支持页（核验日期 2026-09-21）说明免费股票 API 通常为每天 25 次请求，实时和 15 分钟延迟美股行情属于付费能力：[Support](https://www.alphavantage.co/support/)。本次成功只证明一次请求可用，不能推断长期额度、分钟权限或生产稳定性。
