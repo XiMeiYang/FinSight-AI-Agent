@@ -165,7 +165,9 @@ Codex 应主动 cue（提示并带领）后续流程：持续记录当前阶段�
 
 已完成：文档初始化、本轮文档合并、官方公开资料竞品案头调研、可点击原型、SEC EDGAR/Company Facts 离线 PoC 及固定 fixture 测试。真实原型可用性测试、真实用户访谈、竞品产品实测、实时 SEC/API 测试、技术栈冻结、业务代码、部署、真实评测和 Beta 测试仍未完成。文档检查和 fixture 测试不等于在线业务测试。五份 Skill 是仓库源文件，不代表已安装到 Codex；Git 版本记录需在仓库实际启用后核验，不能宣称已提交。
 
-SEC Live PoC 请求路由修复已完成离线验证：company tickers 使用 `www.sec.gov/files/company_tickers.json`，Submissions 和 Company Facts 使用 `data.sec.gov`；请求元数据、重试计数、gzip 和重定向白名单均已覆盖测试。真实 SEC 联网请求仍未执行。
+SEC Live PoC 请求路由修复已完成离线验证：company tickers 使用 `www.sec.gov/files/company_tickers.json`，Submissions 和 Company Facts 使用 `data.sec.gov`；请求元数据、重试计数、gzip 和重定向白名单均已覆盖测试。已补充一次用户执行的 NVDA 真实联网 smoke，生产接入仍未完成。
+
+2026-09-21：用户在本机完成一次 NVDA 真实联网 smoke。ticker mapping 成功得到 CIK `0001045810`；ticker mapping、Submissions、Company Facts、filing 四阶段 HTTP 均为 200，耗时分别为 1740.988、1092.984、4211.057、782.629 ms；共 4 次请求、0 次重试，未出现限速、超时或异常。筛选 87 条 recent filings，规范化 27281 条 Company Facts，下载 29297 bytes，生成 SHA-256。`.local_data/sec` 中 raw 与 normalized 各保存 4 个文件并保持忽略。该结果仅代表一次低频在线 smoke，不等于生产稳定性或完整历史能力验证；真实 User-Agent 内容未记录。
 
 ## 已确认：Codex 多代理与 GitHub 协作
 

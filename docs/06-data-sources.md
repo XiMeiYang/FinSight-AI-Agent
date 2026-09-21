@@ -1,6 +1,6 @@
 # 数据源方案
 
-状态：免费或低成本与 5–15 分钟延迟容忍已确认；具体来源为优先候选，最终选择须真实 API 测试后冻结，接口能力、许可和套餐未核验，尚未连接任何数据源。不提供未经验证的 API 地址、参数、价格或额度。
+状态：免费或低成本与 5–15 分钟延迟容忍已确认；具体来源为优先候选，最终选择须真实 API 测试后冻结，接口能力、许可和套餐未核验，尚未接入生产数据流程。不提供未经验证的 API 地址、参数、价格或额度。
 
 ## 数据需求
 
@@ -44,7 +44,7 @@
 
 仓库已提供标准库 SEC 适配器，覆盖 ticker→CIK、Submissions 申报筛选、归档 URL、Company Facts 规范化、`as_of` 过滤和原始响应 SHA-256。raw 与 normalized 分离，保留来源、时间、表单、accession number、单位和定位 URL。固定 synthetic fixture 仅用于离线验证，不代表 SEC 在线接口、额度、许可或生产数据质量已验证。
 
-官方资料核验（2026-09-21）：[EDGAR APIs](https://www.sec.gov/search-filings/edgar-application-programming-interfaces)；[Accessing EDGAR Data](https://www.sec.gov/search-filings/edgar-search-assistance/accessing-edgar-data)；[SEC rate control](https://www.sec.gov/filergroup/announcements-old/new-rate-control-limits)。本 PoC 的 company tickers 使用 `https://www.sec.gov/files/company_tickers.json`，Submissions 使用 `https://data.sec.gov/submissions/CIK##########.json`，Company Facts 使用 `https://data.sec.gov/api/xbrl/companyfacts/CIK##########.json`；代码生成的 filing URL 使用 SEC Archives 前缀，但该路径不是本核验链接。Company Facts 的 XBRL 边界、10 req/s 公平访问、User-Agent 和 CORS 限制均已记录；实时请求未执行。
+官方资料核验（2026-09-21）：[EDGAR APIs](https://www.sec.gov/search-filings/edgar-application-programming-interfaces)；[Accessing EDGAR Data](https://www.sec.gov/search-filings/edgar-search-assistance/accessing-edgar-data)；[SEC rate control](https://www.sec.gov/filergroup/announcements-old/new-rate-control-limits)。本 PoC 的 company tickers 使用 `https://www.sec.gov/files/company_tickers.json`，Submissions 使用 `https://data.sec.gov/submissions/CIK##########.json`，Company Facts 使用 `https://data.sec.gov/api/xbrl/companyfacts/CIK##########.json`；代码生成的 filing URL 使用 SEC Archives 前缀，但该路径不是本核验链接。Company Facts 的 XBRL 边界、10 req/s 公平访问、User-Agent 和 CORS 限制均已记录；一次 NVDA smoke 已执行，生产接入仍未完成。
 
 网络访问由 `FINSIGHT_SEC_USER_AGENT` 显式控制；未设置时拒绝请求。429/5xx 在有限预算内重试，超时、网络错误、4xx 和无效 JSON 返回结构化错误。PoC 不安装依赖、不连接数据库、不启动任务。
 
