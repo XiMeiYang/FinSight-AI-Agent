@@ -12,7 +12,7 @@ FinSight = Finance + Sight，意为“金融洞察”。定位为个人投资者
 
 2026-09-21 已加入 Alpha Vantage `TIME_SERIES_DAILY` 离线日线 PoC，默认 compact；SEC live smoke 已完成，用户也已完成一次 NVDA 日线 live smoke，但行情供应商仍未冻结。已完成 n=3 真实线上语音访谈匿名聚合，仍属于小样本定性验证。
 
-项目已完成文档初始化、官方竞品案头调研、PRD V1.0/P0-P2 优先级整理、六层数据架构建议、可点击 Web 原型和 SEC EDGAR/Company Facts 离线数据源 PoC。当前仍无完整可运行业务系统、数据库连接或实验结果；已完成一次用户执行的 NVDA 低频实时 smoke；基础 K 线预览与 Excel 导出预览已纳入当前 P0 原型闭环；真实 K 线功能和 Excel 文件生成仍未实现。`.codex/` 中的 Sol/Luna 模型和 low 推理配置只影响支持项目配置的后续会话，不能视为当前会话已经切换。本仓库中的架构、流程、竞品记录和原型均不能视为真实数据能力、实测结果或真实用户需求验证。
+项目已完成文档初始化、官方竞品案头调研、PRD V1.0/P0-P2 优先级整理、六层数据架构建议、可点击 Web 原型和 SEC EDGAR/Company Facts 离线数据源 PoC。已新增离线 ResearchSnapshot synthetic 契约 PoC；当前仍无完整可运行业务系统、数据库连接或实验结果；已完成一次用户执行的 NVDA 低频实时 smoke；基础 K 线预览与 Excel 导出预览已纳入当前 P0 原型闭环；真实 K 线功能和 Excel 文件生成仍未实现。`.codex/` 中的 Sol/Luna 模型和 low 推理配置只影响支持项目配置的后续会话，不能视为当前会话已经切换。本仓库中的架构、流程、竞品记录和原型均不能视为真实数据能力、实测结果或真实用户需求验证。
 
 ## 已确定的产品范围
 
@@ -63,7 +63,7 @@ FinSight = Finance + Sight，意为“金融洞察”。定位为个人投资者
 
 SEC 适配器的离线边界验证和一次 NVDA 低频实时 smoke 已完成。下一步应在确认 SEC 使用政策、User-Agent、保存与再分发范围后，评估是否进行更严格的契约和持续性验证；这次 smoke 不代表生产稳定性。
 
-[用户痛点验证计划](docs/02-user-pain-points.md)、[匿名访谈聚合](docs/research/user-interview-synthesis-001.md) 和 [PRD V1.0](docs/04-prd.md) 已更新。下一步用可点击原型验证“NVDA→保存日线→SEC→事实/来源→摘要展开→Excel→运行记录”闭环，记录匿名化可用性证据；在此之前不把 RAG、多 Agent、新闻或投递写成已实现能力。完整后续顺序见 [开发计划](docs/08-development-plan.md)。
+[用户痛点验证计划](docs/02-user-pain-points.md)、[匿名访谈聚合](docs/research/user-interview-synthesis-001.md) 和 [PRD V1.0](docs/04-prd.md) 已更新。原型可用性测试由用户决定暂缓；当前继续推进离线 ResearchSnapshot 契约，后续再装配真实保存快照。在此之前不把 RAG、多 Agent、新闻或投递写成已实现能力。完整后续顺序见 [开发计划](docs/08-development-plan.md)。
 
 ## 阅读与协作
 
