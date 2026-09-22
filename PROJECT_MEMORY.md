@@ -206,3 +206,7 @@ SEC Live PoC 请求路由修复已完成离线验证：company tickers 使用 `w
 ## 2026-09-23：ResearchSnapshot 身份冲突修复
 
 发现并修复跨证券数据混入风险。ResearchSnapshot 对 symbol、CIK 和行情行 symbol 实施 fail-closed；CIK 统一十位并校验 filing。公司名、交易所、币种按明确优先级合并并检查冲突。本轮没有联网、没有读取真实 `.local_data`，真实 NVDA 文件装配仍未完成。
+
+## 2026-09-23：真实 NVDA 本地快照装配
+
+使用此前保存的真实 Alpha Vantage 与 SEC raw/normalized 文件，完成一次离线 `saved_snapshot` 装配。没有新增网络请求，没有读取 API Key 或 `.env`，输入文件和生成的 NVDA 快照均留在被 `.gitignore` 忽略的 `.local_data`。该次成功不代表生产稳定性；真实 NVDA 文件装配已完成一次，Excel、数据库、RAG、LLM、Agent、前端真实接入和部署仍未完成。

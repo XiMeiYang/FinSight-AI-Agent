@@ -43,7 +43,7 @@ P0/P1/P2 是实现顺序，不删除已确认功能。普通 K 线、复杂 Dash
 
 ## 当前交付与下一步
 
-本轮进入 MVP 基础实现，完成离线 ResearchSnapshot synthetic 契约；不新增联网请求，未编写完整业务系统。原型可用性测试由用户决定暂缓，仍未执行。后续先规划 Problem Discovery 和用户验证的证据收集，再按 P0 演示闭环推进；待实施细节集中记录于 PROJECT_MEMORY.md。
+本轮进入 MVP 基础实现，完成离线 ResearchSnapshot synthetic 契约及一次真实 NVDA 本地 saved_snapshot 装配；不新增联网请求，未编写完整业务系统。原型可用性测试由用户决定暂缓，仍未执行。后续先规划 Problem Discovery 和用户验证的证据收集，再按 P0 演示闭环推进；待实施细节集中记录于 PROJECT_MEMORY.md。
 
 作品集需要展示 Python、SQL、数据分析、金融分析、RAG、多 Agent、工具调用、记忆、评测、监控、产品设计和完整项目落地能力。每阶段保留真实交付与验证记录，不以文档完成代替业务实现，也不以 synthetic 测试代替真实效果。
 

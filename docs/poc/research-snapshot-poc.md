@@ -4,7 +4,7 @@
 
 ## 目标
 
-将 Alpha Vantage 日线规范化结果与 SEC Company Facts/Submissions 规范化结果组合为一个统一、可追溯、可测试的 `ResearchSnapshot` JSON。构建过程不联网、不读取 API Key、不读取 `.local_data`，也不装配真实 NVDA 本地文件。
+将 Alpha Vantage 日线规范化结果与 SEC Company Facts/Submissions 规范化结果组合为一个统一、可追溯、可测试的 `ResearchSnapshot` JSON。synthetic 构建过程不联网、不读取 API Key；saved_snapshot 模式只读取用户显式指定的 `.local_data` 文件。当前已完成一次真实 NVDA 本地离线装配。
 
 ## 输入与输出
 
@@ -37,12 +37,16 @@ git diff --check
 
 ## 已知限制
 
-本轮没有真实 NVDA 文件装配、真实 Excel、数据库、RAG、LLM、Agent、监控、前端真实数据接入或部署。原型可用性测试由用户决定暂缓，仍未执行，后续可以补做，不能写成已验证成功。当前 fixture 仅验证契约和离线逻辑，不代表真实数据质量或生产稳定性。
+本轮已完成一次真实 NVDA 文件离线装配；真实 Excel、数据库、RAG、LLM、Agent、监控、前端真实数据接入或部署仍未完成。原型可用性测试由用户决定暂缓，仍未执行，后续可以补做，不能写成已验证成功。当前 fixture 仅验证契约和离线逻辑，不代表真实数据质量或生产稳定性。
 
 ## 下一步
 
-使用经过审查的本地保存 NVDA 快照进行装配测试，再评估 Excel/API 契约；继续保持网络、密钥和真实文件与 synthetic fixture 隔离。
+下一步评估 Excel/API 契约，并继续保持网络、密钥和真实文件与 synthetic fixture 隔离。
 
 ## 证券身份安全边界
 
-2026-09-23 修复了跨证券混合风险：symbol、CIK 和每根行情记录的 symbol 现在采用 fail-closed 校验；CIK 统一为十位字符串，非法或不一致会拒绝生成快照。公司名、交易所和币种按明确优先级合并，弱字段冲突会阻止静默合并。该修复仍是离线契约测试，不代表真实 NVDA 文件装配或联网验证。
+2026-09-23 修复了跨证券混合风险：symbol、CIK 和每根行情记录的 symbol 现在采用 fail-closed 校验；CIK 统一为十位字符串，非法或不一致会拒绝生成快照。公司名、交易所和币种按明确优先级合并，弱字段冲突会阻止静默合并。该修复仍未产生网络请求；真实 NVDA 装配已通过显式本地文件完成，但不代表联网或生产稳定性。
+
+## 2026-09-23：真实 NVDA 本地离线装配
+
+已使用此前联网 PoC 保存的 `.local_data` 文件，通过显式路径完成一次 `saved_snapshot` 装配。该运行没有新增网络请求，输出仍位于被忽略的 `.local_data/research/snapshots/`，真实输入和生成快照不进入 Git。`retrieved_at` 表示文件采集时间，`as_of` 表示快照分析截止时间，两者不等价。本次成功不代表长期稳定性；Excel、API、数据库、RAG、LLM、Agent、前端连接和部署仍未完成。
