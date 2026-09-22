@@ -202,3 +202,7 @@ SEC Live PoC 请求路由修复已完成离线验证：company tickers 使用 `w
 ## 2026-09-23：MVP 基础实现起点
 
 用户决定暂缓第一轮 3–5 人原型可用性测试，状态仍为未执行，后续可以补做。本轮进入 MVP 基础实现，仅完成离线 synthetic ResearchSnapshot 契约与测试：不连接真实 API、不装配真实 NVDA 本地文件、不使用数据库、RAG、LLM、Agent、邮件、监控或前端真实数据。
+
+## 2026-09-23：ResearchSnapshot 身份冲突修复
+
+发现并修复跨证券数据混入风险。ResearchSnapshot 对 symbol、CIK 和行情行 symbol 实施 fail-closed；CIK 统一十位并校验 filing。公司名、交易所、币种按明确优先级合并并检查冲突。本轮没有联网、没有读取真实 `.local_data`，真实 NVDA 文件装配仍未完成。
