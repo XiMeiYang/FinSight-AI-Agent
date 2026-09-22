@@ -10,14 +10,14 @@
   <header class="top">
     <div class="brand"><span class="brand-mark">F</span><div><strong>FinSight</strong><small>研究工作台</small></div></div>
     <nav aria-label="主导航">
-      <button data-view="home" class="active"><span>⌂</span> 搜索与分析</button>
-      <button data-view="watchlist"><span>☆</span> 我的自选股</button>
-      <button data-view="daily"><span>▤</span> 收盘报告</button>
-      <button data-view="history"><span>↺</span> 历史复盘</button>
+      <button class="nav-item active" data-view="home"><span>⌂</span> 搜索与分析</button>
+      <button class="nav-item" data-view="watchlist"><span>☆</span> 我的自选股</button>
+      <button class="nav-item" data-view="daily"><span>▤</span> 收盘报告</button>
+      <button class="nav-item" data-view="history"><span>↺</span> 历史复盘</button>
     </nav>
     <div class="sidebar-foot"><b>Prototype / Mock Data</b><br>不连接 API<br>不提供投资建议</div>
   </header>
-  <main class="main"><div class="topbar"><div><span class="eyebrow">FINANCIAL RESEARCH</span><h1>搜索与即时分析</h1></div><div class="env">演示环境 · <span>Mock Data</span></div></div><div class="global-notice">当前为离线原型，所有行情、财务事实和图表均为演示数据。</div><section id="app"></section></main>
+  <main class="main"><div class="topbar"><div><span id="page-eyebrow" class="eyebrow">FINANCIAL RESEARCH</span><h1 id="page-title">搜索与即时分析</h1></div><div class="env">演示环境 · <span>Mock Data</span></div></div><div class="global-notice">当前为离线原型，所有行情、财务事实和图表均为演示数据。</div><section id="app"></section></main>
   <div id="modal" class="modal" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="modal-title"><div class="modal-card"><button class="close" aria-label="关闭">×</button><h2 id="modal-title"></h2><div id="modal-body"></div></div></div>
   <script src="app.js"></script>
 </body>
