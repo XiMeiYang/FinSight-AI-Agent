@@ -1,7 +1,8 @@
 import json, unittest
 import subprocess, sys
 from pathlib import Path
-from finsight_research import build_research_snapshot, SnapshotError
+from finsight_research import build_research_snapshot, SnapshotError, SnapshotConflictError
+from finsight_research.models import ResearchSnapshot
 
 ROOT=Path(__file__).parents[1]; F=ROOT/"tests/fixtures"
 class TestSnapshot(unittest.TestCase):
@@ -47,4 +48,26 @@ class TestSnapshot(unittest.TestCase):
         market={**self.kw["market_data"],"rows":[{"close":1},*self.kw["market_data"]["rows"]]}; x=build_research_snapshot(**{**self.kw,"market_data":market}); self.assertEqual(len(x["market_data"]["bars"]),2)
     def test_all_missing_has_no_sources_and_failed_run(self):
         x=build_research_snapshot(symbol="TEST",market_data=None,company_facts=None,filings=None,as_of="2024-01-01",data_mode="synthetic",clock=lambda:"2024-01-02T00:00:00Z"); self.assertEqual(x["sources"],[]); self.assertEqual(x["run_record"]["status"],"failed")
+    def test_symbol_conflict_rejected(self):
+        with self.assertRaises(SnapshotConflictError): build_research_snapshot(**{**self.kw,"market_data":{**self.kw["market_data"],"symbol":"NVDA"}})
+    def test_cik_conflict_rejected(self):
+        with self.assertRaises(SnapshotConflictError): build_research_snapshot(**{**self.kw,"market_data":{**self.kw["market_data"],"cik":"1"},"company_facts":{**self.kw["company_facts"],"cik":"2"}})
+    def test_bar_symbol_conflict(self):
+        with self.assertRaises(SnapshotConflictError): build_research_snapshot(**{**self.kw,"market_data":{**self.kw["market_data"],"rows":[{"symbol":"NVDA","as_of":"2024-01-02"}]}})
+    def test_filing_cik_conflict(self):
+        with self.assertRaises(SnapshotConflictError): build_research_snapshot(**{**self.kw,"filings":[{"cik":"999","filing_date":"2024-01-01","form":"10-K"}]})
+    def test_invalid_and_padded_cik(self):
+        x=build_research_snapshot(**{**self.kw,"market_data":{**self.kw["market_data"],"cik":"123"},"company_facts":{**self.kw["company_facts"],"cik":"123"},"filings":[]}); self.assertEqual(x["security"]["cik"],"0000000123")
+        with self.assertRaises(SnapshotConflictError): build_research_snapshot(**{**self.kw,"market_data":{**self.kw["market_data"],"cik":"bad"}})
+    def test_weak_company_alias_conflict(self):
+        with self.assertRaises(SnapshotConflictError): build_research_snapshot(**{**self.kw,"market_data":{**self.kw["market_data"],"company_name":"Market Corp"},"company_facts":{**self.kw["company_facts"],"entityName":"Facts Corp"}})
+    def test_company_name_alias_conflict(self):
+        with self.assertRaises(SnapshotConflictError): build_research_snapshot(**{**self.kw,"company_facts":{**self.kw["company_facts"],"company_name":"Other Corp"}})
+    def test_facts_only_weak_fields_are_merged(self):
+        x=build_research_snapshot(**{**self.kw,"company_facts":{**self.kw["company_facts"],"exchange":"NASDAQ","currency":"USD"}}); self.assertEqual(x["security"]["exchange"],"NASDAQ"); self.assertEqual(x["security"]["currency"],"USD")
+        self.assertNotIn("currency unavailable", x["data_quality"]["warnings"])
+    def test_facts_only_company_name_is_merged(self):
+        facts={**self.kw["company_facts"],"company_name":"Facts Corp"}; facts.pop("entityName",None); x=build_research_snapshot(**{**self.kw,"market_data":{**self.kw["market_data"],"company_name":None},"company_facts":facts}); self.assertEqual(x["security"]["company_name"],"Facts Corp")
+    def test_snapshot_is_dict_contract(self):
+        x=build_research_snapshot(**self.kw); self.assertIsInstance(x,dict); self.assertIn("security",x); self.assertTrue(hasattr(ResearchSnapshot,"__annotations__"))
 if __name__=='__main__': unittest.main()

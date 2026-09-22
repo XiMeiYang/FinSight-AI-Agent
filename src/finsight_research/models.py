@@ -1,9 +1,7 @@
-"""Serializable model helpers for ResearchSnapshot."""
-from dataclasses import dataclass, asdict
-from typing import Any, Optional
+"""Type contract for the JSON dictionary returned by snapshot builder."""
+from typing import Any, Optional, TypedDict
 
-@dataclass(frozen=True)
-class SourceRecord:
+class SourceRecord(TypedDict, total=False):
     source_id: str
     source_type: str
     provider: str
@@ -13,8 +11,7 @@ class SourceRecord:
     published_at: Optional[str] = None
     raw_sha256: Optional[str] = None
 
-@dataclass(frozen=True)
-class ResearchSnapshot:
+class ResearchSnapshot(TypedDict):
     schema_version: str
     snapshot_id: str
     snapshot_type: str
@@ -29,4 +26,3 @@ class ResearchSnapshot:
     sources: list[dict[str, Any]]
     data_quality: dict[str, Any]
     run_record: dict[str, Any]
-    def to_dict(self): return asdict(self)
