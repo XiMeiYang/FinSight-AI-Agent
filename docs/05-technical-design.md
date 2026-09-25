@@ -235,3 +235,7 @@ saved_snapshot 必须显式提供行情、Company Facts、Submissions 与 ticker
 ### 过滤统计契约
 
 ResearchSnapshot 1.1 将 `filter_counts` 分为 `non_target_form`、各类 `*_after_as_of`、`missing_fact_available_at` 和 `filing_availability_unknown`；`point_in_time_filtered_count` 只等于三类截止时间之后计数，`total_excluded_count` 才汇总所有排除记录。
+
+### Excel 导出边界
+
+Excel 导出读取已保存 ResearchSnapshot，不重新计算或补造金融数字。输出固定包含 Overview、Market_Daily、SEC_Filings、SEC_Facts、Sources、Data_Quality、Run_Record 七个工作表，并保留来源、时间、单位、哈希和排除统计。

@@ -218,3 +218,7 @@ SEC Live PoC 请求路由修复已完成离线验证：company tickers 使用 `w
 ### 2026-09-25 过滤统计与自动测试加固
 
 已确认并测试：Point-in-Time 数量不包含非目标表单或缺少可用时间的记录；ticker mapping 缺失、零值、非法、重复和跨来源 CIK 冲突均安全失败。新增冬夏令时、表单过滤、计数独立性和八文件合成 saved_snapshot 测试。本轮未联网，真实 `.local_data` 不进入仓库。
+
+### 2026-09-26 Excel 导出阶段
+
+已实现 ResearchSnapshot 1.1 到离线 Excel 研究报告的导出闭环。范围仅包括快照校验、七个固定工作表、原子写入和重新打开验证；不包含网络、RAG、LLM、Agent、数据库、邮件或前端真实接入。真实 Excel 不进入 Git。
