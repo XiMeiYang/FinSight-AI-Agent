@@ -78,3 +78,7 @@ K线接口应返回 OHLCV、`event_time`、来源、币种、单位、复权口�
 
 
 2026-09-21：用户完成一次 Alpha Vantage NVDA 日线 live smoke（HTTP 200、1226.955 ms、100 条日线、0 次重试）。官方支持页（核验日期 2026-09-21）通常说明免费股票 API 为每天 25 次请求，实时与 15 分钟延迟美股行情属于付费能力：[Support](https://www.alphavantage.co/support/)。行情生产供应商仍未冻结。
+
+### 本地快照装配边界
+
+ResearchSnapshot 1.1 将 SEC ticker mapping、Company Facts、Submissions 作为三类可区分来源，并记录 raw/normalized SHA-256 与相对输入路径。SEC 接收时间使用美国东部时区语义和 DST 转换；表单过滤与 Point-in-Time 过滤分别计数。本轮仅离线读取已保存文件，不新增网络请求。

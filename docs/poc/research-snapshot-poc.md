@@ -1,5 +1,7 @@
 # ResearchSnapshot 离线 PoC
 
+当前快照契约版本为 **1.1**。SEC ticker→CIK mapping 的 raw 与 normalized 文件必须作为显式输入，与行情、Company Facts、Submissions 三组文件共同形成八文件证据链；旧快照不会被覆盖。Submissions 默认只保留 10-K、10-K/A、10-Q、10-Q/A、8-K、8-K/A；其他表单单独计入 non_target_form。`acceptanceDateTime` 的无时区 14 位值按 `America/New_York` 解析，自动遵循 EST/EDT 夏令时后再与 UTC `as_of` 比较。
+
 状态：已完成离线 synthetic 契约与 fixture 测试。本轮进入 MVP 基础实现，但不是完整 MVP。
 
 ## 目标
@@ -20,7 +22,7 @@ PYTHONPATH=src python3 scripts/build_research_snapshot.py TEST --fixture --as-of
 
 ## Point-in-Time 与状态规则
 
-行情按日期升序并过滤到 `as_of`；SEC 文件按公开/申报时间过滤；事实必须有 `available_at` 且不晚于 `as_of`，缺少该字段会被排除。缺失值保持 `null` 或空列表，不转换为零。`completed` 表示行情与至少一种 SEC 证据存在；只有部分数据时为 `partial`；完全没有行情和 SEC 数据时为 `failed`。过滤数量写入 `data_quality.point_in_time_filtered_count`。
+行情按日期升序并过滤到 `as_of`；SEC 文件按公开/申报时间过滤；事实必须有 `available_at` 且不晚于 `as_of`，缺少该字段会被排除。缺失值保持 `null` 或空列表，不转换为零。`completed` 表示行情与至少一种 SEC 证据存在；只有部分数据时为 `partial`；完全没有行情和 SEC 数据时为 `failed`。过滤数量写入 `data_quality.filter_counts`，分别区分行情、文件、事实的截止时间过滤、缺少可用时间和非目标表单；`point_in_time_filtered_count` 仅作为兼容汇总字段。
 
 ## 运行记录与来源
 

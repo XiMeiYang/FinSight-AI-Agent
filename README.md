@@ -72,3 +72,7 @@ SEC 适配器的离线边界验证和一次 NVDA 低频实时 smoke 已完成。
 任务前阅读 AGENTS.md、PROJECT_MEMORY.md、相关 docs 和 Skill。项目文件是 ChatGPT 与本地 Codex 的共享记忆。已完成 n=3 真实访谈匿名聚合，仍未完成原型可用性测试、完整业务系统、真实评测、Beta 或部署；SEC 与 Alpha Vantage 各已完成一次用户执行的 live smoke，本轮不新增联网请求。固定 fixture 自动测试已完成，可点击原型已完成但真实可用性测试尚未完成，不以规划冒充成果。
 
 后续代码任务使用 Sol 拆解、Luna 低推理执行、独立 Sol 低推理验收。项目已配置 GitHub `origin` 和任务完成后自动提交推送规则；每次是否同步成功以实际 push 输出和 commit ID 为准。竞品调研证据文件只代表截至 2026-09-20 的官方公开资料，功能、价格和版本变化后需要重新核验。
+
+### ResearchSnapshot schema 1.1
+
+当前已完成真实 NVDA 本地快照契约加固：使用本地 SEC ticker mapping 建立 NVDA→CIK 证据链，按 SEC 美国东部时间（含 DST）处理 acceptance 时间，并默认只保留 10-K、10-K/A、10-Q、10-Q/A、8-K、8-K/A。此轮不联网、不覆盖旧快照，也不代表完整 MVP。

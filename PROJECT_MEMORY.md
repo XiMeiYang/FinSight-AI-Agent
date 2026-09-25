@@ -210,3 +210,7 @@ SEC Live PoC 请求路由修复已完成离线验证：company tickers 使用 `w
 ## 2026-09-23：真实 NVDA 本地快照装配
 
 使用此前保存的真实 Alpha Vantage 与 SEC raw/normalized 文件，完成一次离线 `saved_snapshot` 装配。没有新增网络请求，没有读取 API Key 或 `.env`，输入文件和生成的 NVDA 快照均留在被 `.gitignore` 忽略的 `.local_data`。该次成功不代表生产稳定性；真实 NVDA 文件装配已完成一次，Excel、数据库、RAG、LLM、Agent、前端真实接入和部署仍未完成。
+
+### 2026-09-25 ResearchSnapshot 1.1 加固
+
+已确认并修复真实 NVDA 本地快照的身份映射、SEC acceptanceDateTime 时区语义、研究表单过滤和 schema 契约。生产逻辑通过本地 ticker mapping 证明 NVDA→CIK，不硬编码 CIK；接受时间按 America/New_York（含 DST）转 UTC；默认保留 10-K/10-K/A、10-Q/10-Q/A、8-K/8-K/A。此轮零网络请求，未覆盖旧 1.0 快照，未生成 Excel。

@@ -21,7 +21,7 @@ class TestSnapshot(unittest.TestCase):
     def test_input_unchanged(self):
         before=json.dumps(self.kw["market_data"],sort_keys=True); build_research_snapshot(**self.kw); self.assertEqual(before,json.dumps(self.kw["market_data"],sort_keys=True))
     def test_schema_and_run_contract(self):
-        x=build_research_snapshot(**self.kw); self.assertEqual(x["schema_version"],"1.0"); self.assertEqual(x["snapshot_type"],"single_stock_research"); self.assertEqual(x["run_record"]["model_calls"],0); self.assertFalse(x["run_record"]["network_executed"])
+        x=build_research_snapshot(**self.kw); self.assertEqual(x["schema_version"],"1.1"); self.assertEqual(x["snapshot_type"],"single_stock_research"); self.assertEqual(x["run_record"]["model_calls"],0); self.assertFalse(x["run_record"]["network_executed"])
     def test_filing_location_and_source(self):
         x=build_research_snapshot(**self.kw); self.assertIn("000000000024000001",x["sec_filings"][0]["filing_url"]); self.assertEqual(x["sec_filings"][0]["accession_number"],"0000000000-24-000001"); self.assertEqual(len(x["sources"]),2)
     def test_market_cutoff(self):

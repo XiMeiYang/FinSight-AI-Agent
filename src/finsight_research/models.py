@@ -10,6 +10,16 @@ class SourceRecord(TypedDict, total=False):
     data_as_of: Optional[str] = None
     published_at: Optional[str] = None
     raw_sha256: Optional[str] = None
+    normalized_sha256: Optional[str]
+    input_file: Optional[str]
+
+class SecurityRecord(TypedDict, total=False):
+    symbol: str
+    company_name: Optional[str]
+    cik: Optional[str]
+    exchange: Optional[str]
+    currency: Optional[str]
+    ticker_mapping: dict[str, Any]
 
 class ResearchSnapshot(TypedDict):
     schema_version: str
@@ -18,11 +28,11 @@ class ResearchSnapshot(TypedDict):
     created_at: str
     as_of: str
     data_mode: str
-    security: dict[str, Any]
+    security: SecurityRecord
     market_data: dict[str, Any]
     sec_filings: list[dict[str, Any]]
     sec_facts: list[dict[str, Any]]
     summary: dict[str, Any]
-    sources: list[dict[str, Any]]
+    sources: list[SourceRecord]
     data_quality: dict[str, Any]
     run_record: dict[str, Any]

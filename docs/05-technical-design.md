@@ -227,3 +227,7 @@ Quant 角色可针对财报超预期、指引下调、高管变动、回购和�
 ### ResearchSnapshot 身份校验
 
 ResearchSnapshot 的 symbol 和 CIK 是强身份字段。构建器会统一大小写、空白和 CIK 补零，核对请求 symbol、行情元数据、每根行情、Company Facts 与 filing；冲突或非法 CIK 采用 fail-closed，阻止快照进入后续 Excel、RAG 或报告。公司名、交易所和币种是弱字段，采用明确合并优先级并记录缺失/冲突。当前已完成一次读取显式 `.local_data` 文件的离线 saved_snapshot 装配；输入和输出仍不进入 Git。
+
+### ResearchSnapshot 1.1 契约补充
+
+saved_snapshot 必须显式提供行情、Company Facts、Submissions 与 ticker mapping 四组 raw/normalized 文件。ticker mapping 用于证明 symbol→CIK，不能在生产逻辑中硬编码 CIK。SEC acceptanceDateTime 按 America/New_York 解释后转 UTC，并保留原始值；研究文件默认精确过滤为 10-K、10-K/A、10-Q、10-Q/A、8-K、8-K/A。旧 1.0 快照仅作历史产物，不能被覆盖。
