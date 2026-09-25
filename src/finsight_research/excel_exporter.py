@@ -26,8 +26,15 @@ def _validate_snapshot(s: dict[str, Any]) -> None:
         if not isinstance(s.get(k),str) or not s[k].strip(): raise ExcelExportError(f"{k} must be non-empty text")
     if not isinstance(s["security"],dict) or not isinstance(s["security"].get("symbol"),str) or not s["security"]["symbol"].strip(): raise ExcelExportError("snapshot.security.symbol is required text")
     if not _SYMBOL.fullmatch(s["security"]["symbol"].strip().upper()): raise ExcelExportError("snapshot.security.symbol is invalid")
-    if not _DATE.match(s["as_of"]): raise ExcelExportError("as_of must be ISO date or datetime")
-    if s.get("created_at") is not None and (not isinstance(s["created_at"], str) or not _DATE.match(s["created_at"])): raise ExcelExportError("created_at must be ISO date or datetime")
+    def valid_iso(value: Any) -> bool:
+        if not isinstance(value, str) or not _DATE.match(value): return False
+        try:
+            if "T" not in value and " " not in value: date.fromisoformat(value)
+            else: datetime.fromisoformat(value.replace("Z", "+00:00"))
+            return True
+        except ValueError: return False
+    if not valid_iso(s["as_of"]): raise ExcelExportError("as_of must be a valid ISO date or datetime")
+    if s.get("created_at") is not None and not valid_iso(s["created_at"]): raise ExcelExportError("created_at must be a valid ISO date or datetime")
     if not isinstance(s["market_data"],dict): raise ExcelExportError("market_data must be an object")
     if not isinstance(s["market_data"].get("bars"), list) or any(not isinstance(r, dict) for r in s["market_data"]["bars"]): raise ExcelExportError("market_data.bars must be a list of objects")
     for k in ("sec_facts","sec_filings","sources"):
@@ -97,8 +104,8 @@ def _tables(s):
         elif isinstance(v,dict): quality.extend([[f"{k}.{a}",b] for a,b in v.items()] or [[k,None]])
         else: quality.append([k,v])
     run=[["Run ID",rr.get("run_id")],["Status",rr.get("status")],["Started At",rr.get("started_at")],["Completed At",rr.get("completed_at")],["Input Mode",rr.get("input_mode")],["Network Executed",rr.get("network_executed")],["Model Calls",rr.get("model_calls")],["File Hash Verification",rr.get("file_hash_verification")],["Identity Verification",rr.get("identity_verification")],["Snapshot Write",rr.get("snapshot_write")],["Point-in-Time Filter",rr.get("point_in_time_filter")],["Selected Files",rr.get("selected_files")],["Steps",rr.get("steps")],["Warnings",rr.get("warnings")],["Errors",rr.get("errors")],["Snapshot ID",s.get("snapshot_id")],["Schema version",s.get("schema_version")],["Created at",s.get("created_at")],["As of",s.get("as_of")],["Data mode",s.get("data_mode")],["Data quality status",dq.get("status")]]
-    known={x[0] for x in run}
-    run.extend([[k,v] for k,v in rr.items() if k not in known])
+    known_run_keys={"run_id","status","started_at","completed_at","input_mode","network_executed","model_calls","file_hash_verification","identity_verification","snapshot_write","point_in_time_filter","selected_files","steps","warnings","errors"}
+    run.extend([[k,v] for k,v in rr.items() if k not in known_run_keys])
     return {
       "Overview":(["Field","Value","Field","Value"],overview),
       "Market_Daily":(["Symbol","Date","Timestamp","Open","High","Low","Close","Adjusted Close","Volume","Currency","Source","Retrieved At","Adjustment"],[[r.get("symbol",sec.get("symbol")),r.get("as_of",r.get("date")),r.get("timestamp"),r.get("open"),r.get("high"),r.get("low"),r.get("close"),r.get("adjusted_close"),r.get("volume"),r.get("currency",md.get("currency")),r.get("source",md.get("source")),r.get("retrieved_at",md.get("retrieved_at")),md.get("adjustment")] for r in md.get("bars",[])]),

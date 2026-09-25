@@ -125,3 +125,20 @@ class ExcelExporterTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root=Path(directory); path=self._snapshot(root); outside=Path(directory)/"outside"; outside.mkdir(); (root/".local_data"/"linkdir").symlink_to(outside,target_is_directory=True)
             with self.assertRaises(ExcelExportError): export_snapshot_file(path,root/".local_data"/"linkdir"/"x.xlsx")
+
+    def test_run_record_has_no_duplicate_fixed_fields(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory); path=self._snapshot(root); data=json.loads(path.read_text()); data["run_record"].update({"run_id":"r1","status":"completed","network_executed":False,"model_calls":0,"steps":[],"warnings":[],"errors":[],"future_field":"ok"}); path.write_text(json.dumps(data)); out=root/".local_data"/"report.xlsx"; export_snapshot_file(path,out)
+            from openpyxl import load_workbook
+            ws=load_workbook(out,read_only=True)["Run_Record"]; labels=[ws.cell(i,1).value for i in range(5,ws.max_row+1)]
+            for label in ("Run ID","Status","Network Executed","Steps","Warnings","Errors"): self.assertEqual(labels.count(label),1)
+            for raw in ("run_id","network_executed","steps","warnings","errors"): self.assertNotIn(raw,labels)
+            self.assertEqual(labels.count("future_field"),1)
+
+    def test_invalid_calendar_dates_are_rejected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory); path=self._snapshot(root); data=json.loads(path.read_text())
+            for key in ("as_of","created_at"):
+                for value in ("2024-99-99","2024-02-30","2024-01-01T25:00:00Z"):
+                    altered=dict(data); altered[key]=value; path.write_text(json.dumps(altered))
+                    with self.assertRaises(ExcelExportError): export_snapshot_file(path,root/".local_data"/"bad.xlsx")

@@ -27,3 +27,7 @@ PYTHONPATH=src python3 scripts/export_research_excel.py \
 `Market_Daily`、`SEC_Filings`、`SEC_Facts`、`Sources`、`Data_Quality` 和 `Run_Record` 均从第 4 行表头开启 AutoFilter，并冻结到 `A5`；Overview 保持简洁。Market_Daily 将 Date 与 Timestamp 分列，SEC_Facts 将 Filed At 与 Available At 分列，Run_Record 使用稳定字段映射并将嵌套值序列化为 JSON。
 
 真实 NVDA Excel 已重新离线生成：100 根行情、87 份 filing、27281 条 fact、4 个来源。文件为 `.local_data/research/exports/NVDA-2026-09-18.xlsx`，大小 2,162,080 字节，SHA-256 为 `ca4e42727b406bca7b4ec3c58ee0114cdfc3f28b52e9b531d25b516784f4e902`。输入快照 SHA-256 仍为 `53ef46311e168e4f2ddec9be27717306b5dc95efb6e7b6c2253e91751e64759f`。网络请求为 0；尚未进行 Excel 客户端人工视觉验收；K 线图未实现。
+
+## 2026-09-26 最终契约导出
+
+最终导出文件为 `.local_data/research/exports/NVDA-2026-09-18.xlsx`，大小 2,162,042 字节，SHA-256 为 `21daafa6051e94eeadce9345bba7514334953baa71e2da2d74cb325e9496afb6`。输入快照 SHA-256 为 `53ef46311e168e4f2ddec9be27717306b5dc95efb6e7b6c2253e91751e64759f`。工作表数据行数为 Market 100、Filings 87、Facts 27281、Sources 4；AutoFilter 分别为 `A4:M104`、`A4:K91`、`A4:P27285`、`A4:J8`。前一次导出记录保留为早期导出。本次网络请求为 0，尚未进行 Excel 客户端人工视觉验收。
