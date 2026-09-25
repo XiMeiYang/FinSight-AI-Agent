@@ -1,6 +1,6 @@
 # ResearchSnapshot Excel 导出
 
-当前实现把已保存的 `ResearchSnapshot` JSON 离线导出为 `.xlsx`，用于 P0 闭环中的证据查看和文件交付。导出器只读取快照，不联网、不读取 API Key、不调用 LLM，也不补写缺失数字；`null` 和缺失说明会保留为缺失状态。
+当前实现把已保存的 `ResearchSnapshot` JSON 通过 Python `openpyxl` 离线导出为 `.xlsx`，用于 P0 闭环中的证据查看和文件交付。导出器只读取快照，不联网、不读取 API Key、不调用 LLM，也不补写缺失数字；`null` 和缺失说明会保留为缺失状态。输出先写入同目录临时文件，重新打开校验七张表后再原子替换目标文件。
 
 ## 工作表
 
@@ -16,4 +16,8 @@ PYTHONPATH=src python3 scripts/export_research_excel.py \
 
 输入必须是离线快照，且 `run_record.network_executed` 必须是布尔值 `false`。真实 `.local_data` 文件只用于本地验证并保持 Git 忽略；synthetic fixture 可用于自动测试，但不会冒充真实数据。
 
-实现使用工作区随附的 `@oai/artifact-tool` 运行时，Python 模块负责契约校验和 CLI，`scripts/build_research_excel.mjs` 负责工作簿生成。当前未实现公式驱动的金融计算、图表或数据库导出；本文件是快照字段的可追溯导出，不是完整报告。
+实现使用 Python `openpyxl`，不依赖 Node/JS 生产运行时。当前未实现公式驱动的金融计算、图表或数据库导出；本文件是快照字段的可追溯导出，不是完整报告。
+
+## 2026-09-26 本地 NVDA 验证
+
+使用此前保存的八个本地输入离线重新生成了新的 schema 1.1 快照，并保留旧 schema 1.0 文件。随后使用 Python openpyxl 生成 Excel。快照为 NVDA、`saved_snapshot`，包含 100 根行情、87 份目标 filing、27281 条 fact 和 4 个来源；工作簿大小为 2,069,364 字节。Excel 位于 `.local_data/research/exports/NVDA-2026-09-18.xlsx`，未进入 Git。输入快照 SHA-256 为 `53ef46311e168e4f2ddec9be27717306b5dc95efb6e7b6c2253e91751e64759f`，Excel SHA-256 为 `872bdc782bc57bee437225900bca84ee5539275ae1d16164c20ce7a209e64a7a`。本轮网络请求为 0。未完成 Excel 客户端视觉验收；未实现图表。
