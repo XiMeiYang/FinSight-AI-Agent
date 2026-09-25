@@ -83,7 +83,7 @@ class TestSnapshot(unittest.TestCase):
         self.assertEqual(build_research_snapshot(**{**self.kw,"ticker_mapping":[{"ticker":"TEST","cik":"320193"},{"ticker":"OTHER","cik":"320193"}]})["security"]["ticker_mapping"]["ticker"],"TEST")
 
     def test_saved_snapshot_cli_eight_files_temp(self):
-        root=ROOT/".local_data"; temp=Path(tempfile.mkdtemp(prefix="test-eight-",dir=root))
+        root=ROOT/".local_data"; root.mkdir(parents=True, exist_ok=True); temp=Path(tempfile.mkdtemp(prefix="test-eight-",dir=root))
         try:
             payloads={"market":{**self.kw["market_data"],"symbol":"TEST","cik":320193},"sec_companyfacts":{**self.kw["company_facts"],"cik":320193},"sec_submissions":{**self.kw["filings"],"cik":320193},"ticker_mapping":{"ticker":"TEST","cik":"320193"}}; args=[]
             flags={"market":"market","sec_companyfacts":"sec-companyfacts","sec_submissions":"sec-submissions","ticker_mapping":"ticker-mapping"}
@@ -97,5 +97,33 @@ class TestSnapshot(unittest.TestCase):
             self.assertEqual(len(result["run_record"]["selected_files"]),8); self.assertEqual(len(result["sources"]),4)
             self.assertTrue(all(item.get("raw_sha256") and item.get("normalized_sha256") for item in result["sources"]))
         finally: shutil.rmtree(temp,ignore_errors=True)
+
+    def test_exclusion_accounting_explicit_cases(self):
+        base = dict(self.kw)
+        s8 = build_research_snapshot(**{**base, "filings":[{"form":"S-8","filing_date":"2024-01-01","cik":"320193"}]})
+        self.assertEqual(s8["data_quality"]["filter_counts"]["non_target_form"], 1)
+        self.assertEqual(s8["data_quality"]["point_in_time_filtered_count"], 0)
+        self.assertEqual(s8["data_quality"]["total_excluded_count"], 1)
+        missing = build_research_snapshot(**{**base, "company_facts":{"rows":[{"tag":"X","value":1,"unit":"USD"}]}, "filings":[]})
+        self.assertEqual(missing["data_quality"]["filter_counts"]["missing_fact_available_at"], 1)
+        self.assertEqual(missing["data_quality"]["point_in_time_filtered_count"], 0)
+        self.assertEqual(missing["data_quality"]["total_excluded_count"], 1)
+        late_filing = build_research_snapshot(**{**base, "filings":[{"form":"10-K","filing_date":"2099-01-01","cik":"320193"}]})
+        self.assertEqual(late_filing["data_quality"]["filter_counts"]["filing_after_as_of"], 1)
+        self.assertEqual(late_filing["data_quality"]["point_in_time_filtered_count"], 1)
+        late_fact = build_research_snapshot(**{**base, "company_facts":{"rows":[{"tag":"X","value":1,"unit":"USD","available_at":"2099-01-01"}]}, "filings":[]})
+        self.assertEqual(late_fact["data_quality"]["filter_counts"]["fact_after_as_of"], 1)
+        self.assertEqual(late_fact["data_quality"]["point_in_time_filtered_count"], 1)
+        late_market = build_research_snapshot(**{**base, "market_data":{**base["market_data"], "rows":[{"as_of":"2099-01-01","timestamp":"2099-01-01T00:00:00Z","close":1}]}, "filings":[]})
+        self.assertEqual(late_market["data_quality"]["filter_counts"]["market_after_as_of"], 1)
+        self.assertEqual(late_market["data_quality"]["point_in_time_filtered_count"], 1)
+
+    def test_plain_winter_and_summer_sec_boundaries(self):
+        for raw, boundary, before in (("20240102170000", "2024-01-02T22:00:00Z", "2024-01-02T21:59:59Z"), ("20240702170000", "2024-07-02T21:00:00Z", "2024-07-02T20:59:59Z")):
+            filing = {"form":"10-K", "acceptance_datetime":raw, "cik":"320193"}
+            before = build_research_snapshot(**{**self.kw, "filings":[filing], "as_of":before})
+            equal = build_research_snapshot(**{**self.kw, "filings":[filing], "as_of":boundary})
+            self.assertEqual(before["sec_filings"], [])
+            self.assertEqual(len(equal["sec_filings"]), 1)
 
 if __name__=='__main__': unittest.main()

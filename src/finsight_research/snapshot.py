@@ -119,7 +119,12 @@ def build_research_snapshot(*, symbol, market_data=None, company_facts=None, fil
         publication=f.get("published_at") or f.get("filing_date")
         acceptance=f.get("acceptance_datetime")
         if acceptance and len(str(acceptance)) < 12: acceptance=None
-        if not (acceptance or publication): filter_counts["filing_availability_unknown"]+=1
+        if not (acceptance or publication):
+            # Unknown availability is its own exclusion category.  Do not
+            # also count it as a post-cutoff filing.
+            filter_counts["filing_availability_unknown"]+=1
+            filtered += 1; excluded_count += 1
+            continue
         if not _before(acceptance or publication, cutoff): filtered += 1; excluded_count += 1; filter_counts["filing_after_as_of"]+=1; continue
         filing_url=f.get("filing_url") or f.get("source_url")
         if not filing_url and f.get("accession_number") and (f.get("cik") or security["cik"]):
@@ -152,5 +157,10 @@ def build_research_snapshot(*, symbol, market_data=None, company_facts=None, fil
     if not normalized_filings: missing.append("sec_filings")
     status="completed" if bars and (available or normalized_filings) else "partial" if bars or available or normalized_filings else "failed"
     run_status="completed" if status != "failed" else "failed"
-    result={"schema_version":"1.1","snapshot_id":snapshot_id or _id("snapshot",symbol,cutoff),"snapshot_type":"single_stock_research","created_at":now,"as_of":cutoff,"data_mode":data_mode,"security":security,"market_data":market_out,"sec_filings":normalized_filings,"sec_facts":available,"summary":{"latest_market_observation":latest.get("as_of") if latest else None,"available_fact_count":len(available),"available_filing_count":len(normalized_filings),"evidence_status":"complete" if bars and (available or normalized_filings) else "partial" if (bars or available or normalized_filings) else "insufficient","limitations":["news data unavailable"],"target_forms":sorted(allowed_forms)},"sources":sources,"data_quality":{"status":status,"missing_fields":missing,"missing_sources":missing,"warnings":warnings,"conflicts":conflicts,"point_in_time_filtered_count":filtered,"total_excluded_count":excluded_count,"filter_counts":filter_counts},"run_record":{"run_id":run_id or _id("run",symbol,cutoff),"status":run_status,"started_at":now,"completed_at":now,"input_mode":"fixture" if data_mode=="synthetic" else "saved_snapshot","network_executed":False,"steps":[{"name":"assemble_market","status":"completed" if bars else "skipped"},{"name":"assemble_sec","status":"completed" if (available or normalized_filings) else "skipped"},{"name":"point_in_time_filter","status":"completed"}],"warnings":missing,"errors":[] if status != "failed" else ["no usable market or SEC data"],"model_calls":0}}
+    # Keep the compatibility counters derived from the categorized counts so
+    # an excluded record cannot be counted twice (for example S-8 or missing
+    # fact availability).
+    point_in_time_filtered_count = sum(filter_counts[key] for key in ("market_after_as_of", "filing_after_as_of", "fact_after_as_of"))
+    total_excluded_count = sum(filter_counts.values())
+    result={"schema_version":"1.1","snapshot_id":snapshot_id or _id("snapshot",symbol,cutoff),"snapshot_type":"single_stock_research","created_at":now,"as_of":cutoff,"data_mode":data_mode,"security":security,"market_data":market_out,"sec_filings":normalized_filings,"sec_facts":available,"summary":{"latest_market_observation":latest.get("as_of") if latest else None,"available_fact_count":len(available),"available_filing_count":len(normalized_filings),"evidence_status":"complete" if bars and (available or normalized_filings) else "partial" if (bars or available or normalized_filings) else "insufficient","limitations":["news data unavailable"],"target_forms":sorted(allowed_forms)},"sources":sources,"data_quality":{"status":status,"missing_fields":missing,"missing_sources":missing,"warnings":warnings,"conflicts":conflicts,"point_in_time_filtered_count":point_in_time_filtered_count,"total_excluded_count":total_excluded_count,"filter_counts":filter_counts},"run_record":{"run_id":run_id or _id("run",symbol,cutoff),"status":run_status,"started_at":now,"completed_at":now,"input_mode":"fixture" if data_mode=="synthetic" else "saved_snapshot","network_executed":False,"steps":[{"name":"assemble_market","status":"completed" if bars else "skipped"},{"name":"assemble_sec","status":"completed" if (available or normalized_filings) else "skipped"},{"name":"point_in_time_filter","status":"completed"}],"warnings":missing,"errors":[] if status != "failed" else ["no usable market or SEC data"],"model_calls":0}}
     return result

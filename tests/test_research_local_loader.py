@@ -22,6 +22,11 @@ class LocalLoaderTests(unittest.TestCase):
   rel,sha=atomic_write_json('out/a.json',{'x':1},data_root=self.root); self.assertEqual(rel,'out/a.json'); self.assertEqual(json.loads((self.root/rel).read_text()),{'x':1})
   with self.assertRaises(LocalDataError): atomic_write_json('out/a.json',{'x':2},data_root=self.root)
   atomic_write_json('out/a.json',{'x':2},data_root=self.root,overwrite=True); self.assertEqual(json.loads((self.root/rel).read_text()),{'x':2})
+ def test_atomic_creates_isolated_missing_data_root(self):
+  missing=Path(self.t.name)/'isolated'/'.local_data'
+  rel,_=atomic_write_json('snapshots/a.json',{'ok':True},data_root=missing)
+  self.assertEqual(rel,'snapshots/a.json')
+  self.assertEqual(json.loads((missing/rel).read_text()),{'ok':True})
  def test_output_escape(self):
   with self.assertRaises(LocalDataError): atomic_write_json('../bad.json',{},data_root=self.root)
  def test_output_symlink_rejected_even_overwrite(self):
