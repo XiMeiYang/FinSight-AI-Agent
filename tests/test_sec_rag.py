@@ -34,3 +34,10 @@ class ContractTests(unittest.TestCase):
         with self.assertRaises(ValueError): build_sec_ingestion(raw,meta,'TEST','2024-12-31')
 
 if __name__=='__main__': unittest.main()
+
+class CliBatchTests(unittest.TestCase):
+ def test_cli_batch_file_types_and_overwrite(self):
+  import subprocess,sys,tempfile,shutil,os
+  with tempfile.TemporaryDirectory() as d:
+   root=Path(d)/'.local_data'; (root/'raw').mkdir(parents=True); (root/'metadata').mkdir(); src=Path('tests/fixtures/sec_filing.synthetic.html'); meta=Path('tests/fixtures/sec_filing_metadata.synthetic.json'); shutil.copy(src,root/'raw/input.html'); shutil.copy(meta,root/'metadata/meta.json'); out=root/'rag'; env={**os.environ,'PYTHONPATH':str(Path.cwd()/'src')}; cmd=[sys.executable,str(Path.cwd()/'scripts/build_sec_chunks.py'),'--input','.local_data/raw/input.html','--metadata','.local_data/metadata/meta.json','--symbol','TEST','--as-of','2024-12-31','--output-dir','.local_data/rag']
+   r=subprocess.run(cmd,env=env,cwd=d,capture_output=True,text=True); self.assertEqual(r.returncode,0,r.stderr); files=list((out/'documents').glob('*.json')); self.assertEqual(len(files),1); did=files[0].stem; self.assertEqual(json.loads(files[0].read_text())['document_id'],did); self.assertTrue(list((out/'chunks').glob('*.jsonl'))); self.assertTrue(list((out/'manifests').glob('*.json'))); self.assertNotEqual(subprocess.run(cmd,env=env,cwd=d,capture_output=True).returncode,0)
