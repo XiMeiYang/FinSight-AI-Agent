@@ -1,4 +1,4 @@
-import json, unittest
+import json, unittest, tempfile, shutil, os
 import subprocess, sys
 from pathlib import Path
 from finsight_research import build_research_snapshot, SnapshotError, SnapshotConflictError
@@ -70,4 +70,32 @@ class TestSnapshot(unittest.TestCase):
         facts={**self.kw["company_facts"],"company_name":"Facts Corp"}; facts.pop("entityName",None); x=build_research_snapshot(**{**self.kw,"market_data":{**self.kw["market_data"],"company_name":None},"company_facts":facts}); self.assertEqual(x["security"]["company_name"],"Facts Corp")
     def test_snapshot_is_dict_contract(self):
         x=build_research_snapshot(**self.kw); self.assertIsInstance(x,dict); self.assertIn("security",x); self.assertTrue(hasattr(ResearchSnapshot,"__annotations__"))
+    def test_dst_and_filter_count_contract(self):
+        fs=[{"form":"S-8","acceptance_datetime":"20240310015959","cik":"320193"},{"form":"10-K","acceptance_datetime":"20240310030000","cik":"320193"},{"form":"10-Q","acceptance_datetime":"20241103015959","cik":"320193"},{"form":"8-K","acceptance_datetime":"20241103030000","cik":"320193"}]
+        x=build_research_snapshot(**{**self.kw,"filings":fs,"as_of":"2024-11-03T07:00:00Z","target_forms":["10-K","10-Q","8-K","S-8"]})
+        self.assertEqual(len(x["sec_filings"]),3); self.assertEqual(x["data_quality"]["total_excluded_count"],1)
+        y=build_research_snapshot(**{**self.kw,"filings":fs,"as_of":"2024-03-10T07:00:00Z","target_forms":["10-K","10-Q","8-K"]})
+        self.assertEqual(y["data_quality"]["filter_counts"]["non_target_form"],1); self.assertEqual(y["data_quality"]["total_excluded_count"],3)
+
+    def test_ticker_mapping_identity_fail_closed(self):
+        for bad in ({"cik":"320193"},{"ticker":"TEST","cik":"0"},{"ticker":"TEST","cik":"abc"},[{"ticker":"TEST","cik":"320193"},{"ticker":"TEST","cik":"320193"}],{"ticker":"OTHER","cik":"320193"}):
+            with self.assertRaises(SnapshotConflictError): build_research_snapshot(**{**self.kw,"ticker_mapping":bad})
+        self.assertEqual(build_research_snapshot(**{**self.kw,"ticker_mapping":[{"ticker":"TEST","cik":"320193"},{"ticker":"OTHER","cik":"320193"}]})["security"]["ticker_mapping"]["ticker"],"TEST")
+
+    def test_saved_snapshot_cli_eight_files_temp(self):
+        root=ROOT/".local_data"; temp=Path(tempfile.mkdtemp(prefix="test-eight-",dir=root))
+        try:
+            payloads={"market":{**self.kw["market_data"],"symbol":"TEST","cik":320193},"sec_companyfacts":{**self.kw["company_facts"],"cik":320193},"sec_submissions":{**self.kw["filings"],"cik":320193},"ticker_mapping":{"ticker":"TEST","cik":"320193"}}; args=[]
+            flags={"market":"market","sec_companyfacts":"sec-companyfacts","sec_submissions":"sec-submissions","ticker_mapping":"ticker-mapping"}
+            (temp/"normalized").mkdir(); (temp/"raw").mkdir()
+            for key,payload in payloads.items():
+                for kind in ("normalized","raw"):
+                    p=temp/kind/f"{key}.json"; p.write_text(json.dumps(payload)); args += [f"--{flags[key]}-{kind}",str(p.relative_to(ROOT/".local_data"))]
+            proc=subprocess.run([sys.executable,"scripts/build_research_snapshot.py","TEST","--saved-snapshot","--as-of","2024-12-31",*args],cwd=ROOT,env={**os.environ,"PYTHONPATH":"src"},capture_output=True,text=True)
+            self.assertEqual(proc.returncode,0,proc.stderr)
+            result=json.loads(proc.stdout); self.assertEqual(result["data_mode"],"saved_snapshot")
+            self.assertEqual(len(result["run_record"]["selected_files"]),8); self.assertEqual(len(result["sources"]),4)
+            self.assertTrue(all(item.get("raw_sha256") and item.get("normalized_sha256") for item in result["sources"]))
+        finally: shutil.rmtree(temp,ignore_errors=True)
+
 if __name__=='__main__': unittest.main()

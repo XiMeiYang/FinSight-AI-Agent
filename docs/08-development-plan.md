@@ -60,3 +60,5 @@ P0/P1/P2 是实现顺序，不删除已确认功能。普通 K 线、复杂 Dash
 ### 当前快照契约加固状态
 
 已完成 ResearchSnapshot 1.1 的离线契约修复：本地 ticker mapping 身份证明、SEC Eastern 时间语义、目标表单过滤和八文件哈希证据链。真实 NVDA 旧快照保留不覆盖；Excel、RAG、Agent、数据库和部署仍未完成。
+
+本轮补充了 ResearchSnapshot 1.1 的过滤统计和自动测试，包括 SEC 冬夏令时、目标表单、ticker/CIK fail-closed 以及八文件合成装配。真实联网、Excel、RAG、Agent、数据库和前端接入仍未进行。

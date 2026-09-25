@@ -36,6 +36,21 @@ def _before(value, cutoff):
     except ValueError: return False
 def _id(prefix, symbol, as_of): return prefix + "-" + hashlib.sha256(f"{symbol}|{as_of}".encode()).hexdigest()[:16]
 
+def _validate_ticker_mapping(mapping, symbol):
+    if not mapping:
+        return None, None
+    if isinstance(mapping, list): rows = mapping
+    elif isinstance(mapping, dict) and not any(k in mapping for k in ("ticker", "symbol", "cik", "cik_str")): rows = list(mapping.values())
+    else: rows = [mapping]
+    rows = [row for row in rows if isinstance(row, dict)]
+    matches = [row for row in rows if str(row.get("ticker", row.get("symbol", ""))).strip().upper() == symbol]
+    if len(matches) != 1: raise SnapshotConflictError("ticker mapping must contain exactly one requested ticker")
+    row = matches[0]; ticker = str(row.get("ticker", row.get("symbol", ""))).strip().upper()
+    cik = row.get("cik", row.get("cik_str"))
+    if not ticker or not cik: raise SnapshotConflictError("ticker mapping ticker and CIK are required")
+    if not _CIK.fullmatch(str(cik)) or int(str(cik)) == 0: raise SnapshotConflictError("ticker mapping CIK must be a non-zero decimal")
+    return row, str(cik)
+
 def build_research_snapshot(*, symbol, market_data=None, company_facts=None, filings=None,
                             ticker_mapping=None, as_of, data_mode, clock=None,
                             snapshot_id=None, run_id=None, target_forms=("10-K", "10-K/A", "10-Q", "10-Q/A", "8-K", "8-K/A")):
@@ -50,7 +65,7 @@ def build_research_snapshot(*, symbol, market_data=None, company_facts=None, fil
     allowed_forms = {str(form).strip().upper() for form in target_forms}
     if not allowed_forms: raise SnapshotError("target_forms must not be empty")
     conflicts=[]; warnings=[]
-    filter_counts={"non_target_form":0,"market_after_as_of":0,"filing_after_as_of":0,"fact_after_as_of":0,"missing_fact_available_at":0,"filing_availability_unknown":0}
+    filter_counts={"non_target_form":0,"market_after_as_of":0,"market_missing_timestamp":0,"filing_after_as_of":0,"fact_after_as_of":0,"missing_fact_available_at":0,"filing_availability_unknown":0}
     weak_values={"company_name":(market.get("company_name"),facts_payload.get("company_name"),facts_payload.get("entity_name"),facts_payload.get("entityName")),"exchange":(market.get("exchange"),facts_payload.get("exchange")),"currency":(market.get("currency"),facts_payload.get("currency"))}
     for field, candidates in weak_values.items():
         vals={str(v).strip() for v in candidates if v not in (None, "")}
@@ -64,10 +79,7 @@ def build_research_snapshot(*, symbol, market_data=None, company_facts=None, fil
     if supplied_symbols and supplied_symbols != {symbol}: raise SnapshotConflictError("symbol conflict in snapshot inputs")
     market_cik=market.get("cik"); facts_cik=facts_payload.get("cik")
     if market_cik and facts_cik and str(market_cik).zfill(10) != str(facts_cik).zfill(10): raise SnapshotConflictError("CIK conflict in snapshot inputs")
-    mapping_ticker = str(mapping.get("ticker", mapping.get("symbol", ""))).strip().upper()
-    mapping_cik = mapping.get("cik") or mapping.get("cik_str")
-    if mapping_ticker and mapping_ticker != symbol: raise SnapshotConflictError("ticker mapping symbol conflict")
-    if mapping_cik is not None and not _CIK.fullmatch(str(mapping_cik)): raise SnapshotConflictError("invalid ticker mapping CIK")
+    mapping, mapping_cik = _validate_ticker_mapping(mapping, symbol)
     all_ciks = [v for v in (market_cik, facts_cik, mapping_cik) if v is not None]
     if all_ciks and len({str(v).zfill(10) for v in all_ciks}) > 1: raise SnapshotConflictError("ticker mapping CIK conflict")
     if not (market.get("currency") or facts_payload.get("currency")): warnings.append("currency unavailable")
@@ -77,9 +89,13 @@ def build_research_snapshot(*, symbol, market_data=None, company_facts=None, fil
     if mapping:
         security["ticker_mapping"] = {k: mapping[k] for k in ("ticker", "symbol", "cik", "cik_str", "source_url", "retrieved_at", "raw_sha256", "normalized_sha256", "input_file") if k in mapping}
     market_rows=market.get("rows", market.get("bars", [])); bars=[]
+    excluded_count = 0
     for row in market_rows:
-        if _before(row.get("timestamp") or row.get("as_of") or row.get("date"), cutoff): bars.append(deepcopy(row))
-        else: filter_counts["market_after_as_of"]+=1
+        marker = row.get("timestamp") or row.get("as_of") or row.get("date")
+        if not marker:
+            excluded_count += 1; filter_counts["market_missing_timestamp"] += 1
+        elif _before(marker, cutoff): bars.append(deepcopy(row))
+        else: excluded_count += 1; filter_counts["market_after_as_of"]+=1
     bars.sort(key=lambda row: (row.get("as_of") or row.get("date") or row.get("timestamp"), repr(sorted(row.items()))))
     for row in bars:
         if row.get("symbol") and str(row["symbol"]).strip().upper() != symbol: raise SnapshotConflictError("bar symbol conflict")
@@ -94,7 +110,7 @@ def build_research_snapshot(*, symbol, market_data=None, company_facts=None, fil
     filtered=0; normalized_filings=[]
     for f in raw_filings:
         if str(f.get("form", "")).strip().upper() not in allowed_forms:
-            filtered += 1; filter_counts["non_target_form"]+=1
+            filtered += 1; excluded_count += 1; filter_counts["non_target_form"]+=1
             continue
         if f.get("cik"):
             if not _CIK.fullmatch(str(f["cik"])): raise SnapshotConflictError("invalid filing CIK")
@@ -104,7 +120,7 @@ def build_research_snapshot(*, symbol, market_data=None, company_facts=None, fil
         acceptance=f.get("acceptance_datetime")
         if acceptance and len(str(acceptance)) < 12: acceptance=None
         if not (acceptance or publication): filter_counts["filing_availability_unknown"]+=1
-        if not _before(acceptance or publication, cutoff): filtered += 1; filter_counts["filing_after_as_of"]+=1; continue
+        if not _before(acceptance or publication, cutoff): filtered += 1; excluded_count += 1; filter_counts["filing_after_as_of"]+=1; continue
         filing_url=f.get("filing_url") or f.get("source_url")
         if not filing_url and f.get("accession_number") and (f.get("cik") or security["cik"]):
             cik=str(f.get("cik") or security["cik"]).lstrip("0")
@@ -121,8 +137,8 @@ def build_research_snapshot(*, symbol, market_data=None, company_facts=None, fil
     available=[]
     for fact in facts:
         if not fact.get("available_at"):
-            filter_counts["missing_fact_available_at"]+=1; filtered += 1; continue
-        if not _before(fact.get("available_at"), cutoff): filtered += 1; filter_counts["fact_after_as_of"]+=1; continue
+            filter_counts["missing_fact_available_at"]+=1; filtered += 1; excluded_count += 1; continue
+        if not _before(fact.get("available_at"), cutoff): filtered += 1; excluded_count += 1; filter_counts["fact_after_as_of"]+=1; continue
         available.append(fact)
     sources=[]; seen=set()
     def add(kind, provider, url, retrieved, data_as_of=None, published_at=None, sha=None):
@@ -136,5 +152,5 @@ def build_research_snapshot(*, symbol, market_data=None, company_facts=None, fil
     if not normalized_filings: missing.append("sec_filings")
     status="completed" if bars and (available or normalized_filings) else "partial" if bars or available or normalized_filings else "failed"
     run_status="completed" if status != "failed" else "failed"
-    result={"schema_version":"1.1","snapshot_id":snapshot_id or _id("snapshot",symbol,cutoff),"snapshot_type":"single_stock_research","created_at":now,"as_of":cutoff,"data_mode":data_mode,"security":security,"market_data":market_out,"sec_filings":normalized_filings,"sec_facts":available,"summary":{"latest_market_observation":latest.get("as_of") if latest else None,"available_fact_count":len(available),"available_filing_count":len(normalized_filings),"evidence_status":"complete" if bars and (available or normalized_filings) else "partial" if (bars or available or normalized_filings) else "insufficient","limitations":["news data unavailable"],"target_forms":sorted(allowed_forms)},"sources":sources,"data_quality":{"status":status,"missing_fields":missing,"missing_sources":missing,"warnings":warnings,"conflicts":conflicts,"point_in_time_filtered_count":filtered,"filter_counts":filter_counts},"run_record":{"run_id":run_id or _id("run",symbol,cutoff),"status":run_status,"started_at":now,"completed_at":now,"input_mode":"fixture" if data_mode=="synthetic" else "saved_snapshot","network_executed":False,"steps":[{"name":"assemble_market","status":"completed" if bars else "skipped"},{"name":"assemble_sec","status":"completed" if (available or normalized_filings) else "skipped"},{"name":"point_in_time_filter","status":"completed"}],"warnings":missing,"errors":[] if status != "failed" else ["no usable market or SEC data"],"model_calls":0}}
+    result={"schema_version":"1.1","snapshot_id":snapshot_id or _id("snapshot",symbol,cutoff),"snapshot_type":"single_stock_research","created_at":now,"as_of":cutoff,"data_mode":data_mode,"security":security,"market_data":market_out,"sec_filings":normalized_filings,"sec_facts":available,"summary":{"latest_market_observation":latest.get("as_of") if latest else None,"available_fact_count":len(available),"available_filing_count":len(normalized_filings),"evidence_status":"complete" if bars and (available or normalized_filings) else "partial" if (bars or available or normalized_filings) else "insufficient","limitations":["news data unavailable"],"target_forms":sorted(allowed_forms)},"sources":sources,"data_quality":{"status":status,"missing_fields":missing,"missing_sources":missing,"warnings":warnings,"conflicts":conflicts,"point_in_time_filtered_count":filtered,"total_excluded_count":excluded_count,"filter_counts":filter_counts},"run_record":{"run_id":run_id or _id("run",symbol,cutoff),"status":run_status,"started_at":now,"completed_at":now,"input_mode":"fixture" if data_mode=="synthetic" else "saved_snapshot","network_executed":False,"steps":[{"name":"assemble_market","status":"completed" if bars else "skipped"},{"name":"assemble_sec","status":"completed" if (available or normalized_filings) else "skipped"},{"name":"point_in_time_filter","status":"completed"}],"warnings":missing,"errors":[] if status != "failed" else ["no usable market or SEC data"],"model_calls":0}}
     return result

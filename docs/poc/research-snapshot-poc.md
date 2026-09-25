@@ -52,3 +52,7 @@ git diff --check
 ## 2026-09-23：真实 NVDA 本地离线装配
 
 已使用此前联网 PoC 保存的 `.local_data` 文件，通过显式路径完成一次 `saved_snapshot` 装配。该运行没有新增网络请求，输出仍位于被忽略的 `.local_data/research/snapshots/`，真实输入和生成快照不进入 Git。`retrieved_at` 表示文件采集时间，`as_of` 表示快照分析截止时间，两者不等价。本次成功不代表长期稳定性；Excel、API、数据库、RAG、LLM、Agent、前端连接和部署仍未完成。
+
+### 2026-09-25 契约测试加固
+
+`point_in_time_filtered_count` 仅统计行情、目标 filing 和事实晚于 `as_of` 的记录；非目标表单与缺少可用时间分别计入 `filter_counts`，所有排除记录可由 `total_excluded_count` 查看。自动测试覆盖冬令时、夏令时、六类目标表单、S-8 排除、ticker/CIK fail-closed 校验及八文件 saved_snapshot 合成集成路径。测试不读取真实 `.local_data`，真实八文件运行结果仍来自用户本地。

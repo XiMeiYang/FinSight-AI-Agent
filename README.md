@@ -76,3 +76,5 @@ SEC 适配器的离线边界验证和一次 NVDA 低频实时 smoke 已完成。
 ### ResearchSnapshot schema 1.1
 
 当前已完成真实 NVDA 本地快照契约加固：使用本地 SEC ticker mapping 建立 NVDA→CIK 证据链，按 SEC 美国东部时间（含 DST）处理 acceptance 时间，并默认只保留 10-K、10-K/A、10-Q、10-Q/A、8-K、8-K/A。此轮不联网、不覆盖旧快照，也不代表完整 MVP。
+
+ResearchSnapshot 1.1 的过滤统计已区分 Point-in-Time 排除、非目标表单和缺少可用时间；自动测试覆盖冬夏令时、表单过滤、身份校验和八文件合成装配。本轮仍未实现 Excel、RAG、LLM、Agent、数据库、前端真实接入或部署。

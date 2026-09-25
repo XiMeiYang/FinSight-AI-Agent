@@ -231,3 +231,7 @@ ResearchSnapshot 的 symbol 和 CIK 是强身份字段。构建器会统一大�
 ### ResearchSnapshot 1.1 契约补充
 
 saved_snapshot 必须显式提供行情、Company Facts、Submissions 与 ticker mapping 四组 raw/normalized 文件。ticker mapping 用于证明 symbol→CIK，不能在生产逻辑中硬编码 CIK。SEC acceptanceDateTime 按 America/New_York 解释后转 UTC，并保留原始值；研究文件默认精确过滤为 10-K、10-K/A、10-Q、10-Q/A、8-K、8-K/A。旧 1.0 快照仅作历史产物，不能被覆盖。
+
+### 过滤统计契约
+
+ResearchSnapshot 1.1 将 `filter_counts` 分为 `non_target_form`、各类 `*_after_as_of`、`missing_fact_available_at` 和 `filing_availability_unknown`；`point_in_time_filtered_count` 只等于三类截止时间之后计数，`total_excluded_count` 才汇总所有排除记录。

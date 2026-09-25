@@ -21,6 +21,25 @@ class SecurityRecord(TypedDict, total=False):
     currency: Optional[str]
     ticker_mapping: dict[str, Any]
 
+class FilterCounts(TypedDict, total=False):
+    non_target_form: int
+    market_after_as_of: int
+    market_missing_timestamp: int
+    filing_after_as_of: int
+    fact_after_as_of: int
+    missing_fact_available_at: int
+    filing_availability_unknown: int
+
+class DataQuality(TypedDict, total=False):
+    status: str
+    missing_fields: list[str]
+    missing_sources: list[str]
+    warnings: list[str]
+    conflicts: list[str]
+    point_in_time_filtered_count: int
+    total_excluded_count: int
+    filter_counts: FilterCounts
+
 class ResearchSnapshot(TypedDict):
     schema_version: str
     snapshot_id: str
@@ -34,5 +53,5 @@ class ResearchSnapshot(TypedDict):
     sec_facts: list[dict[str, Any]]
     summary: dict[str, Any]
     sources: list[SourceRecord]
-    data_quality: dict[str, Any]
+    data_quality: DataQuality
     run_record: dict[str, Any]

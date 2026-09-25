@@ -214,3 +214,7 @@ SEC Live PoC 请求路由修复已完成离线验证：company tickers 使用 `w
 ### 2026-09-25 ResearchSnapshot 1.1 加固
 
 已确认并修复真实 NVDA 本地快照的身份映射、SEC acceptanceDateTime 时区语义、研究表单过滤和 schema 契约。生产逻辑通过本地 ticker mapping 证明 NVDA→CIK，不硬编码 CIK；接受时间按 America/New_York（含 DST）转 UTC；默认保留 10-K/10-K/A、10-Q/10-Q/A、8-K/8-K/A。此轮零网络请求，未覆盖旧 1.0 快照，未生成 Excel。
+
+### 2026-09-25 过滤统计与自动测试加固
+
+已确认并测试：Point-in-Time 数量不包含非目标表单或缺少可用时间的记录；ticker mapping 缺失、零值、非法、重复和跨来源 CIK 冲突均安全失败。新增冬夏令时、表单过滤、计数独立性和八文件合成 saved_snapshot 测试。本轮未联网，真实 `.local_data` 不进入仓库。
