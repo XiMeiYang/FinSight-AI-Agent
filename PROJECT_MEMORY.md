@@ -222,3 +222,7 @@ SEC Live PoC 请求路由修复已完成离线验证：company tickers 使用 `w
 ### 2026-09-26 Excel 导出阶段
 
 已实现 ResearchSnapshot 1.1 到离线 Excel 研究报告的导出闭环。范围仅包括快照校验、七个固定工作表、原子写入和重新打开验证；不包含网络、RAG、LLM、Agent、数据库、邮件或前端真实接入。真实 Excel 不进入 Git。
+
+### 2026-09-26 SEC RAG ingestion PoC
+
+本轮仅完成本地 SEC 文档解析、清洗、章节识别和确定性字符分块，保留文档与 chunk 的来源定位和 SHA-256。未联网；未实现 embedding、向量数据库、LLM、Agent 或问答。真实 NVDA filing 正文当前缺失或未确认。

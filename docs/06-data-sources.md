@@ -82,3 +82,7 @@ K线接口应返回 OHLCV、`event_time`、来源、币种、单位、复权口�
 ### 本地快照装配边界
 
 ResearchSnapshot 1.1 将 SEC ticker mapping、Company Facts、Submissions 作为三类可区分来源，并记录 raw/normalized SHA-256 与相对输入路径。SEC 接收时间使用美国东部时区语义和 DST 转换；表单过滤与 Point-in-Time 过滤分别计数。本轮仅离线读取已保存文件，不新增网络请求。
+
+### SEC 正文摄取状态
+
+当前只实现本地 SEC HTML/XML 清洗、章节识别和确定性分块。Submissions 与 Company Facts 不作为正文替代；真实 filing 正文缺失时只运行 synthetic 验证，不联网补抓。

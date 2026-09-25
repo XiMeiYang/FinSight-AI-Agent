@@ -80,3 +80,7 @@ SEC 适配器的离线边界验证和一次 NVDA 低频实时 smoke 已完成。
 ResearchSnapshot 1.1 的过滤统计已区分 Point-in-Time 排除、非目标表单和缺少可用时间；自动测试覆盖冬夏令时、表单过滤、身份校验和八文件合成装配。本轮仍未实现 Excel、RAG、LLM、Agent、数据库、前端真实接入或部署。
 
 ResearchSnapshot 1.1 已增加离线 Excel 导出路径：导出器和 synthetic 测试已在本轮实现，真实文件只允许保存在被忽略的 `.local_data` 中；不连接网络，也不代表 RAG、Agent、数据库或前端已完成。
+
+### SEC RAG ingestion PoC
+
+已实现离线 SEC 正文清洗、章节识别和确定性字符分块。当前未实现 embedding、向量检索、LLM 问答或 Agent。真实 NVDA filing 正文当前未确认，synthetic 测试已完成。

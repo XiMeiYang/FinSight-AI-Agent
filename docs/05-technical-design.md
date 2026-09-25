@@ -239,3 +239,7 @@ ResearchSnapshot 1.1 将 `filter_counts` 分为 `non_target_form`、各类 `*_af
 ### Excel 导出边界
 
 Excel 导出读取已保存 ResearchSnapshot，不重新计算或补造金融数字。输出固定包含 Overview、Market_Daily、SEC_Filings、SEC_Facts、Sources、Data_Quality、Run_Record 七个工作表，并保留来源、时间、单位、哈希和排除统计。
+
+### SEC 文档摄取 PoC
+
+新增离线解析与字符分块层，输入限定为 `.local_data` 文件，输出保留章节、偏移、文本哈希和引用信息。Embedding、向量索引、Reranker、LLM 和 Agent 仍待后续实现。
