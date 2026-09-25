@@ -1,5 +1,6 @@
 import hashlib, unittest, json
 from pathlib import Path
+ROOT=Path('tests')
 from finsight_rag import clean_html, identify_sections, chunk_sections
 class RagTests(unittest.TestCase):
  def test_clean_and_sections(self):
@@ -13,5 +14,23 @@ class RagTests(unittest.TestCase):
      with self.assertRaises(ValueError): build_sec_ingestion(raw,meta,'NVDA','2024-12-31')
      with self.assertRaises(ValueError): build_sec_ingestion(raw,{**meta,'cik':'0'},'TEST','2024-12-31')
      with self.assertRaises(ValueError): build_sec_ingestion(raw,{**meta,'form':'S-8'},'TEST','2024-12-31')
+
+class ContractTests(unittest.TestCase):
+    def test_bytes_hash_and_mismatch(self):
+        from finsight_rag.ingestion import build_sec_ingestion
+        meta=json.loads((ROOT/'fixtures/sec_filing_metadata.synthetic.json').read_text())
+        raw=(ROOT/'fixtures/sec_filing.synthetic.html').read_bytes()
+        doc,_,_=build_sec_ingestion(raw,meta,' TEST ','2024-12-31',input_sha256=__import__('hashlib').sha256(raw).hexdigest())
+        self.assertEqual(doc['input_sha256'],__import__('hashlib').sha256(raw).hexdigest())
+        with self.assertRaisesRegex(ValueError,'mismatch'): build_sec_ingestion(raw,meta,'TEST','2024-12-31',input_sha256='0'*64)
+    def test_source_and_time_contract(self):
+        from finsight_rag.ingestion import build_sec_ingestion
+        meta=json.loads((ROOT/'fixtures/sec_filing_metadata.synthetic.json').read_text()); raw=(ROOT/'fixtures/sec_filing.synthetic.html').read_text()
+        meta['source_url']='https://evil.example/x'
+        with self.assertRaises(ValueError): build_sec_ingestion(raw,meta,'TEST','2024-12-31')
+        meta['source_url']='https://www.sec.gov/Archives/x'; meta['accepted_at']='20241231170000'
+        build_sec_ingestion(raw,meta,'TEST','2024-12-31')
+        meta['accepted_at']='20250101170000'
+        with self.assertRaises(ValueError): build_sec_ingestion(raw,meta,'TEST','2024-12-31')
 
 if __name__=='__main__': unittest.main()

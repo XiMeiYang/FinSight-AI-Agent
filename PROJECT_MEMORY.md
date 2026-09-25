@@ -226,3 +226,11 @@ SEC Live PoC 请求路由修复已完成离线验证：company tickers 使用 `w
 ### 2026-09-26 SEC RAG ingestion PoC
 
 本轮仅完成本地 SEC 文档解析、清洗、章节识别和确定性字符分块，保留文档与 chunk 的来源定位和 SHA-256。未联网；未实现 embedding、向量数据库、LLM、Agent 或问答。真实 NVDA filing 正文当前缺失或未确认。
+
+### 2026-09-26 SEC RAG 摄取与语料边界
+
+- 已完成离线 SEC 文档解析、确定性分块、来源哈希和严格 metadata 时间/表单/身份校验。
+- 证券目录（SecurityCatalog）与 RAG 语料覆盖状态（RAGCoverage）分离；能搜索证券不代表已有语料。
+- 多公司候选范围为 NVDA、AMD、INTC、AVGO、QCOM，默认精确选择最多 5 份 10-K 与 15 份 10-Q，不自动混入修订表单。
+- 本轮未执行新的 SEC 网络请求；当前本机缺少 `FINSIGHT_SEC_USER_AGENT`，其余公司 submissions 本地文件也未保存，因此未生成真实多公司 corpus。
+- embedding、向量数据库、Reranker、LLM、Agent、数据库和前端接入仍未实现。

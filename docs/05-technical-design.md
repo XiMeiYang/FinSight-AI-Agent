@@ -243,3 +243,7 @@ Excel 导出读取已保存 ResearchSnapshot，不重新计算或补造金融数
 ### SEC 文档摄取 PoC
 
 新增离线解析与字符分块层，输入限定为 `.local_data` 文件，输出保留章节、偏移、文本哈希和引用信息。Embedding、向量索引、Reranker、LLM 和 Agent 仍待后续实现。
+
+### SEC 语料边界（2026-09-26）
+
+SEC 文档摄取保持离线、可追溯契约：原始 bytes 哈希、UTC 时间、SEC 14 位 Eastern 时间转换、表单白名单与路径安全先于分块。`SecurityCatalog` 负责证券身份，`RAGCoverage` 单独描述 corpus 是否存在，避免把证券搜索与语料覆盖混为一谈。向量索引、embedding、reranker 和模型调用仍未实现。

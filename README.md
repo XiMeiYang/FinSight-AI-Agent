@@ -84,3 +84,7 @@ ResearchSnapshot 1.1 已增加离线 Excel 导出路径：导出器和 synthetic
 ### SEC RAG ingestion PoC
 
 已实现离线 SEC 正文清洗、章节识别和确定性字符分块。当前未实现 embedding、向量检索、LLM 问答或 Agent。真实 NVDA filing 正文当前未确认，synthetic 测试已完成。
+
+## SEC 文档解析与覆盖状态（2026-09-26）
+
+已加入离线 SEC HTML 清洗、章节识别、确定性分块、哈希校验、`SecurityCatalog` 和独立 `RAGCoverage` 状态。多公司候选脚本覆盖 NVDA、AMD、INTC、AVGO、QCOM，当前只读取本地 metadata；本轮未执行新的 SEC 网络请求，也未实现 embedding、向量数据库、Reranker、LLM、Agent 或前端接入。详见 [SEC RAG 摄取 PoC](docs/poc/sec-rag-ingestion-poc.md) 与 [多公司 SEC 语料 PoC](docs/poc/sec-corpus-poc.md)。

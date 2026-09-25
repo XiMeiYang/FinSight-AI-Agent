@@ -86,3 +86,7 @@ ResearchSnapshot 1.1 将 SEC ticker mapping、Company Facts、Submissions 作为
 ### SEC 正文摄取状态
 
 当前只实现本地 SEC HTML/XML 清洗、章节识别和确定性分块。Submissions 与 Company Facts 不作为正文替代；真实 filing 正文缺失时只运行 synthetic 验证，不联网补抓。
+
+### SEC 文档语料状态
+
+多公司候选为 NVDA、AMD、INTC、AVGO、QCOM，精确选择上限为每家公司 5 份 10-K 与 15 份 10-Q。当前只对已有本地 submissions 生成候选；未配置 SEC User-Agent 时不联网、不下载、不估算缺失公司的数据。
