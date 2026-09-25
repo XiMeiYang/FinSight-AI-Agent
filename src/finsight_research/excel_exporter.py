@@ -13,6 +13,7 @@ EXPECTED_SHEETS = ["Overview","Market_Daily","SEC_Filings","SEC_Facts","Sources"
 _FORMULA = re.compile(r"^[=+\-@]")
 _URL = re.compile(r"^https?://[^\s]+$", re.I)
 _DATE = re.compile(r"^\d{4}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?)?$")
+_SYMBOL = re.compile(r"^[A-Z][A-Z0-9.\-]{0,9}$")
 
 def _validate_snapshot(s: dict[str, Any]) -> None:
     required={"schema_version","snapshot_id","as_of","security","market_data","sec_facts","sec_filings","sources","data_quality","run_record"}
@@ -24,7 +25,11 @@ def _validate_snapshot(s: dict[str, Any]) -> None:
     for k in ("snapshot_id","as_of"):
         if not isinstance(s.get(k),str) or not s[k].strip(): raise ExcelExportError(f"{k} must be non-empty text")
     if not isinstance(s["security"],dict) or not isinstance(s["security"].get("symbol"),str) or not s["security"]["symbol"].strip(): raise ExcelExportError("snapshot.security.symbol is required text")
+    if not _SYMBOL.fullmatch(s["security"]["symbol"].strip().upper()): raise ExcelExportError("snapshot.security.symbol is invalid")
+    if not _DATE.match(s["as_of"]): raise ExcelExportError("as_of must be ISO date or datetime")
+    if s.get("created_at") is not None and (not isinstance(s["created_at"], str) or not _DATE.match(s["created_at"])): raise ExcelExportError("created_at must be ISO date or datetime")
     if not isinstance(s["market_data"],dict): raise ExcelExportError("market_data must be an object")
+    if not isinstance(s["market_data"].get("bars"), list) or any(not isinstance(r, dict) for r in s["market_data"]["bars"]): raise ExcelExportError("market_data.bars must be a list of objects")
     for k in ("sec_facts","sec_filings","sources"):
         if not isinstance(s[k],list) or any(not isinstance(r,dict) for r in s[k]): raise ExcelExportError(f"{k} must be a list of objects")
     if not isinstance(s["data_quality"],dict) or not isinstance(s["run_record"],dict): raise ExcelExportError("data_quality and run_record must be objects")
@@ -79,6 +84,7 @@ def _table(ws, title, headers, rows, s):
     for row in ws.iter_rows(min_row=4,max_row=mr,min_col=1,max_col=mc):
         for x in row: x.border=Border(bottom=side); x.alignment=Alignment(vertical="center",wrap_text=x.row>4)
     ws.freeze_panes="A5"
+    ws.auto_filter.ref=f"A4:{get_column_letter(mc)}{max(4, len(rows)+4)}"
     for c in range(1,mc+1): ws.column_dimensions[get_column_letter(c)].width=min(42,max(12,max(len(str(ws.cell(r,c).value or "")) for r in range(1,mr+1))+2))
 
 def _tables(s):
@@ -90,14 +96,14 @@ def _tables(s):
         if isinstance(v,list): quality.extend([[k,x] for x in v] or [[k,None]])
         elif isinstance(v,dict): quality.extend([[f"{k}.{a}",b] for a,b in v.items()] or [[k,None]])
         else: quality.append([k,v])
-    run=[["Snapshot ID",s.get("snapshot_id")],["Schema version",s.get("schema_version")],["Created at",s.get("created_at")],["As of",s.get("as_of")],["Data mode",s.get("data_mode")],["Network executed",rr.get("network_executed")],["Model calls",rr.get("model_calls")],["Run ID",rr.get("run_id")],["Run status",rr.get("status")],["Data quality status",dq.get("status")]]
+    run=[["Run ID",rr.get("run_id")],["Status",rr.get("status")],["Started At",rr.get("started_at")],["Completed At",rr.get("completed_at")],["Input Mode",rr.get("input_mode")],["Network Executed",rr.get("network_executed")],["Model Calls",rr.get("model_calls")],["File Hash Verification",rr.get("file_hash_verification")],["Identity Verification",rr.get("identity_verification")],["Snapshot Write",rr.get("snapshot_write")],["Point-in-Time Filter",rr.get("point_in_time_filter")],["Selected Files",rr.get("selected_files")],["Steps",rr.get("steps")],["Warnings",rr.get("warnings")],["Errors",rr.get("errors")],["Snapshot ID",s.get("snapshot_id")],["Schema version",s.get("schema_version")],["Created at",s.get("created_at")],["As of",s.get("as_of")],["Data mode",s.get("data_mode")],["Data quality status",dq.get("status")]]
     known={x[0] for x in run}
     run.extend([[k,v] for k,v in rr.items() if k not in known])
     return {
       "Overview":(["Field","Value","Field","Value"],overview),
-      "Market_Daily":(["Symbol","As of","Open","High","Low","Close","Volume","Adjusted close","Currency","Source","Retrieved at","Adjustment"],[[r.get("symbol",sec.get("symbol")),r.get("as_of",r.get("date",r.get("timestamp"))),r.get("open"),r.get("high"),r.get("low"),r.get("close"),r.get("volume"),r.get("adjusted_close"),r.get("currency",md.get("currency")),r.get("source",md.get("source")),r.get("retrieved_at",md.get("retrieved_at")),md.get("adjustment")] for r in md.get("bars",[])]),
+      "Market_Daily":(["Symbol","Date","Timestamp","Open","High","Low","Close","Adjusted Close","Volume","Currency","Source","Retrieved At","Adjustment"],[[r.get("symbol",sec.get("symbol")),r.get("as_of",r.get("date")),r.get("timestamp"),r.get("open"),r.get("high"),r.get("low"),r.get("close"),r.get("adjusted_close"),r.get("volume"),r.get("currency",md.get("currency")),r.get("source",md.get("source")),r.get("retrieved_at",md.get("retrieved_at")),md.get("adjustment")] for r in md.get("bars",[])]),
       "SEC_Filings":(["Form","Filing date","Report date","Acceptance datetime","Accession","Primary document","Published at","Source","Source URL","Retrieved at","CIK"],[[r.get("form"),r.get("filing_date"),r.get("report_date"),r.get("acceptance_datetime"),r.get("accession_number"),r.get("primary_document"),r.get("published_at"),r.get("source"),r.get("source_url",r.get("filing_url")),r.get("retrieved_at"),r.get("cik",sec.get("cik"))] for r in s["sec_filings"]]),
-      "SEC_Facts":(["Taxonomy","Tag","Label","Value","Unit","Currency","Period start","Period end","Available at","Form","Frame","Accession","Source","Source URL","Retrieved at"],[[r.get("taxonomy"),r.get("tag"),r.get("label"),r.get("value"),r.get("unit"),r.get("currency"),r.get("period_start"),r.get("period_end"),r.get("available_at",r.get("filed_at")),r.get("form"),r.get("frame"),r.get("accession_number"),r.get("source"),r.get("source_url"),r.get("retrieved_at")] for r in s["sec_facts"]]),
+      "SEC_Facts":(["Taxonomy","Tag","Label","Value","Unit","Currency","Period start","Period end","Filed At","Available At","Form","Frame","Accession","Source","Source URL","Retrieved At"],[[r.get("taxonomy"),r.get("tag"),r.get("label"),r.get("value"),r.get("unit"),r.get("currency"),r.get("period_start"),r.get("period_end"),r.get("filed_at"),r.get("available_at"),r.get("form"),r.get("frame"),r.get("accession_number"),r.get("source"),r.get("source_url"),r.get("retrieved_at")] for r in s["sec_facts"]]),
       "Sources":(["Source ID","Type","Provider","Source URL","Published at","Data as of","Retrieved at","Raw SHA-256","Normalized SHA-256","Input file"],[[r.get("source_id"),r.get("source_type"),r.get("provider"),r.get("source_url"),r.get("published_at"),r.get("data_as_of"),r.get("retrieved_at"),r.get("raw_sha256"),r.get("normalized_sha256"),r.get("input_file")] for r in s["sources"]]),
       "Data_Quality":(["Field","Value"],quality),"Run_Record":(["Field","Value"],run)}
 

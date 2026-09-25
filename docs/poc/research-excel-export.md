@@ -21,3 +21,9 @@ PYTHONPATH=src python3 scripts/export_research_excel.py \
 ## 2026-09-26 本地 NVDA 验证
 
 使用此前保存的八个本地输入离线重新生成了新的 schema 1.1 快照，并保留旧 schema 1.0 文件。随后使用 Python openpyxl 生成 Excel。快照为 NVDA、`saved_snapshot`，包含 100 根行情、87 份目标 filing、27281 条 fact 和 4 个来源；工作簿大小为 2,069,364 字节。Excel 位于 `.local_data/research/exports/NVDA-2026-09-18.xlsx`，未进入 Git。输入快照 SHA-256 为 `53ef46311e168e4f2ddec9be27717306b5dc95efb6e7b6c2253e91751e64759f`，Excel SHA-256 为 `872bdc782bc57bee437225900bca84ee5539275ae1d16164c20ce7a209e64a7a`。本轮网络请求为 0。未完成 Excel 客户端视觉验收；未实现图表。
+
+## 2026-09-26 Excel 契约补充
+
+`Market_Daily`、`SEC_Filings`、`SEC_Facts`、`Sources`、`Data_Quality` 和 `Run_Record` 均从第 4 行表头开启 AutoFilter，并冻结到 `A5`；Overview 保持简洁。Market_Daily 将 Date 与 Timestamp 分列，SEC_Facts 将 Filed At 与 Available At 分列，Run_Record 使用稳定字段映射并将嵌套值序列化为 JSON。
+
+真实 NVDA Excel 已重新离线生成：100 根行情、87 份 filing、27281 条 fact、4 个来源。文件为 `.local_data/research/exports/NVDA-2026-09-18.xlsx`，大小 2,162,080 字节，SHA-256 为 `ca4e42727b406bca7b4ec3c58ee0114cdfc3f28b52e9b531d25b516784f4e902`。输入快照 SHA-256 仍为 `53ef46311e168e4f2ddec9be27717306b5dc95efb6e7b6c2253e91751e64759f`。网络请求为 0；尚未进行 Excel 客户端人工视觉验收；K 线图未实现。

@@ -98,3 +98,30 @@ class ExcelExporterTests(unittest.TestCase):
                 xml = "".join(archive.read(name).decode("utf-8", "ignore") for name in archive.namelist() if name.startswith("xl/") and name.endswith(".xml"))
             self.assertNotIn("<x:f>", xml)
             self.assertIn("=HYPERLINK", xml)
+
+    def test_workbook_contract_filters_and_field_columns(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory); path=self._snapshot(root); out=root/".local_data"/"report.xlsx"; export_snapshot_file(path,out)
+            from openpyxl import load_workbook
+            wb=load_workbook(out, read_only=False, data_only=False)
+            self.assertEqual(wb.sheetnames,["Overview","Market_Daily","SEC_Filings","SEC_Facts","Sources","Data_Quality","Run_Record"])
+            for name in ("Market_Daily","SEC_Filings","SEC_Facts","Sources","Data_Quality","Run_Record"):
+                self.assertIsNotNone(wb[name].auto_filter.ref); self.assertEqual(wb[name].freeze_panes,"A5")
+            headers=[c.value for c in wb["SEC_Facts"][4]]
+            self.assertIn("Filed At", headers); self.assertIn("Available At", headers)
+            values=[c.value for row in wb["Overview"].iter_rows() for c in row]
+            self.assertIn("For research assistance only. Not investment advice.", values)
+            self.assertIn("Generated report does not mean an email was sent.", values)
+            wb.close()
+
+    def test_rejects_bad_as_of_symbol_and_bars(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory); path=self._snapshot(root); data=json.loads(path.read_text())
+            for key,value in (("as_of","bad"),("created_at","bad"),("market_data",{"bars":{}}),("security",{"symbol":"bad symbol"})):
+                altered=dict(data); altered[key]=value; path.write_text(json.dumps(altered))
+                with self.assertRaises(ExcelExportError): export_snapshot_file(path,root/".local_data"/"bad.xlsx")
+
+    def test_output_parent_symlink_rejected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory); path=self._snapshot(root); outside=Path(directory)/"outside"; outside.mkdir(); (root/".local_data"/"linkdir").symlink_to(outside,target_is_directory=True)
+            with self.assertRaises(ExcelExportError): export_snapshot_file(path,root/".local_data"/"linkdir"/"x.xlsx")
