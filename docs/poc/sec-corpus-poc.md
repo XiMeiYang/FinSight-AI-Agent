@@ -9,3 +9,7 @@
 ## 两阶段下载边界
 
 第一阶段使用 `--candidate-only` 生成 manifest；第二阶段必须显式传入已审阅的 `--candidate-manifest` 并使用 `--network`。下载器复用 `SECClient`，只接受 SEC Archives primary document，保存 raw、metadata、document、chunks 和 manifests，并记录请求/重试/下载大小。缺少 `FINSIGHT_SEC_USER_AGENT` 时在任何请求前失败。本轮测试只使用 synthetic fixture 和 mock/零网络路径，未执行真实下载。
+
+### 最后阻断修复
+
+Candidate row 的 `ticker` 在下载保存 metadata 时显式转换为标准化 `symbol`，再交给 `build_sec_ingestion`；不会放宽 ingestion 的缺失身份校验。`--network --refresh-metadata` 只补齐缺失 submissions 并重新生成候选清单，不下载正文。正文下载必须使用带 ticker mapping 证明、截止时间和数量预算的已审阅 manifest。
