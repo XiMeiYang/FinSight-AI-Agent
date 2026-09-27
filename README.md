@@ -87,4 +87,6 @@ ResearchSnapshot 1.1 已增加离线 Excel 导出路径：导出器和 synthetic
 
 ## SEC 文档解析与覆盖状态（2026-09-26）
 
-已加入离线 SEC HTML 清洗、章节识别、确定性分块、哈希校验、`SecurityCatalog` 和独立 `RAGCoverage` 状态。多公司候选脚本覆盖 NVDA、AMD、INTC、AVGO、QCOM，当前只读取本地 metadata；本轮未执行新的 SEC 网络请求，也未实现 embedding、向量数据库、Reranker、LLM、Agent 或前端接入。详见 [SEC RAG 摄取 PoC](docs/poc/sec-rag-ingestion-poc.md) 与 [多公司 SEC 语料 PoC](docs/poc/sec-corpus-poc.md)。
+已加入离线 SEC HTML 清洗、章节识别、确定性分块、哈希校验、`SecurityCatalog` 和独立 `RAGCoverage` 状态。上一阶段五家公司 submissions metadata refresh 实际执行 4 次 SEC 请求；本阶段正文下载请求为 0。多公司候选脚本覆盖 NVDA、AMD、INTC、AVGO、QCOM，尚未实现 embedding、向量数据库、Reranker、LLM、Agent 或前端接入。详见 [SEC RAG 摄取 PoC](docs/poc/sec-rag-ingestion-poc.md) 与 [多公司 SEC 语料 PoC](docs/poc/sec-corpus-poc.md)。
+
+正文下载器已加入离线 dry-run、稳定小批量选择、预算预检、五类产物批次提交与失败回滚。100 份是已确认候选，不是已下载正文；下一轮先执行每家公司最新 10-K/10-Q 的最多 10 份小批量，完成验收前不称为完整 RAG。

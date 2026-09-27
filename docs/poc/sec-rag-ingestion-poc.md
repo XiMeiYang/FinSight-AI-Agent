@@ -2,6 +2,8 @@
 
 截至 2026-09-26，本阶段完成离线 SEC 文档解析、章节识别、确定性分块、SHA-256 溯源和安全契约校验。`build_sec_chunks.py` 只读取 `.local_data` 下显式指定的文件，输出 document/chunks/manifest，并以临时目录批量原子替换；不会联网、调用模型或写入向量库。
 
+正文下载器加固同样只完成离线验证：100 份为候选清单，本轮正文请求为 0；下一轮先验收最多 10 份最新 10-K/10-Q，完成验收前不称为完整 RAG。
+
 ## 输入与约束
 
 - metadata 必须包含规范化 symbol、非零十位 CIK、合法 accession、允许表单（10-K/10-Q/8-K 及修订）、HTTPS SEC 来源 URL。
@@ -33,4 +35,4 @@ PYTHONPATH=src python3 scripts/build_sec_corpus.py \
   --output /tmp/sec-candidates.json
 ```
 
-当前本机没有配置 `FINSIGHT_SEC_USER_AGENT`，因此未执行新的 SEC 网络请求。AMD、INTC、AVGO、QCOM 的 submissions 也不在现有本地文件中，不能伪造 corpus 数量。
+五家公司 submissions 与 100 份候选清单已完成验证；本轮正文下载为 0，不能将候选数量描述为完整 corpus。
