@@ -1,10 +1,10 @@
 # 开发计划
 
-补充状态（2026-10-05）：`network_executed=true`、`status=completed`、corpus aggregate SHA-256=`45172c...`；本轮已完成正文下载、HTML 清洗、解析、section、chunks 与 citation。未实现 Embedding/BM25/RRF/Reranker/LLM/Agent/前端/数据库/邮件。
+补充状态（2026-10-05）：已在 10 份真实 filing、2,003 chunks 上完成完全离线 BM25 baseline、过滤搜索和 provisional 诊断评测，本轮 `network_executed=false`、`model_calls=0`。未实现 Embedding、RRF、Reranker、LLM 回答、Agent、前端、数据库或邮件。
 
 ## 2026-10-05 SEC 真实小批量结果
 
-完成五家公司各最新 10-K/10-Q 的 10 份真实下载与独立验收（10/10 bundles，5 K + 5 Q，19,573,518 raw bytes，399 sections，2,003 chunks，request 12、retry 2、failed 0、model_calls 0）。100 份仍是候选，剩余 90 份未下载；尚未实现 Embedding、BM25、RRF、Reranker、LLM、Agent、前端、数据库或邮件。下一步确认离线检索/评测方案。
+完成五家公司各最新 10-K/10-Q 的 10 份真实下载与独立验收（10/10 bundles，5 K + 5 Q，19,573,518 raw bytes，399 sections，2,003 chunks），并构建 14,406 词表的 BM25 索引。20 条开发者 provisional 查询仅是当前 corpus 的诊断样本，不是用户真实查询或生产准确率。100 份仍是候选，剩余 90 份未下载；下一步应由用户任务形成独立查询集，再决定是否实现 Embedding 对照。RRF、Reranker、LLM、Agent、前端、数据库和邮件仍未实现。
 
 ## 已完成的离线 SEC 数据 PoC
 

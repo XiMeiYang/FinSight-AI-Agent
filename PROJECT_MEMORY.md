@@ -1,10 +1,10 @@
 # 项目记忆
 
-补充状态（2026-10-05）：`network_executed=true`、`status=completed`、corpus aggregate SHA-256=`45172c...`；本轮完成正文下载、HTML 清洗、解析、section、chunks 与 citation，未实现 Embedding/BM25/RRF/Reranker/LLM/Agent。
+补充状态（2026-10-05）：在已验收的 10 份真实 filing、2,003 chunks 上完成离线 BM25 baseline、过滤搜索和 provisional 诊断评测，`network_executed=false`、`model_calls=0`。未实现 Embedding、RRF、Reranker、LLM 回答或 Agent。
 
 ## 2026-10-05 SEC 真实正文小批量
 
-已完成 10 份真实小批量（5 K + 5 Q，19,573,518 raw bytes，399 sections，2,003 chunks，request 12、retry 2、failed 0、model_calls 0）。100 份是已确认候选，剩余 90 份未下载；本轮不是完整 RAG。下一步确认离线检索/评测方案。
+已完成 10 份真实小批量（5 K + 5 Q，19,573,518 raw bytes，399 sections，2,003 chunks），并构建 14,406 词表的离线 BM25 索引。20 条开发者 provisional 查询覆盖每家公司 4 条、10-K/10-Q 各 10 条；它们不是用户真实查询，样本小且有构造偏差。BM25 是后续检索方法的 baseline，本轮不是完整 RAG；剩余 90 份候选未下载。
 
 初始化及本次背景确认日期：2026-09-20。
 决策来源：用户转交的、已经与产品规划助手确认的项目背景，以及此前初始化要求。以本次完整背景为当前依据，旧决定如被明确调整则保留变更记录。本文区分“已确认决策”“建议方案”和“待验证假设”；“已确定”与“已确认”同义，均不代表功能已实现。
@@ -71,7 +71,7 @@
 
 ## 已确认 RAG 要求与建议检索流程
 
-金融 RAG、证据追溯与引用核验属于已确认要求；具体检索流程按最新背景归为**建议方案**：
+金融 RAG、证据追溯与引用核验属于已确认要求。BM25 词法索引与过滤搜索已实现为离线 baseline；其余流程仍为**建议方案**：
 
 文档解析 → 按章节、段落和表格进行 Chunk（分块） → BM25 关键词检索 → Embedding 语义检索 → RRF 融合 → Cross-Encoder Reranker（交叉编码重排） → 截止时间过滤 → 提取证据 → 生成带引用回答 → 引用核验。
 

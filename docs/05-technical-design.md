@@ -2,7 +2,7 @@
 
 状态：多 Agent、金融 RAG、Point-in-Time 与可追溯数据要求已确认；Agent 角色拆分、检索流程和具体技术栈为暂定或候选方案。Python、SQL 是确定的能力展示要求，框架、模型、数据库和行情最终供应商待定，未部署任何服务。
 
-SEC corpus 当前仍处于候选与离线 PoC 阶段：100 份是已确认候选，不等于正文已下载；本轮网络请求为 0。下一轮先执行最多 10 份小批量正文下载并独立验收，之后才评估完整 RAG。
+SEC corpus 当前处于离线 PoC 阶段：100 份是已确认候选，其中 10 份正文已下载并形成 2,003 chunks。已实现纯 Python BM25 Okapi baseline（`k1=1.5`、`b=0.75`）、Point-in-Time 预过滤搜索与 provisional 诊断评测；真实索引和查询集仅保存在 `.local_data`。Embedding、RRF、Reranker、LLM 回答与完整引用核验尚未实现。
 
 ## 模块划分
 
@@ -248,4 +248,4 @@ Excel 导出读取已保存 ResearchSnapshot，不重新计算或补造金融数
 
 ### SEC 语料边界（2026-09-26）
 
-SEC 文档摄取保持离线、可追溯契约：原始 bytes 哈希、UTC 时间、SEC 14 位 Eastern 时间转换、表单白名单与路径安全先于分块。`SecurityCatalog` 负责证券身份，`RAGCoverage` 单独描述 corpus 是否存在，避免把证券搜索与语料覆盖混为一谈。向量索引、embedding、reranker 和模型调用仍未实现。
+SEC 文档摄取保持离线、可追溯契约：原始 bytes 哈希、UTC 时间、SEC 14 位 Eastern 时间转换、表单白名单与路径安全先于分块。`SecurityCatalog` 负责证券身份，`RAGCoverage` 单独描述 corpus 是否存在，避免把证券搜索与语料覆盖混为一谈。BM25 索引采用安全 JSON/JSONL、corpus aggregate SHA-256、索引产物哈希、目录级原子提交及 stale provenance 拒绝；symbol/form/as-of 在评分前过滤。向量索引、embedding、RRF、reranker 和模型调用仍未实现。

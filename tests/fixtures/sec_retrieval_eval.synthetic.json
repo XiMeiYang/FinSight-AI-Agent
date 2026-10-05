@@ -1,0 +1,27 @@
+{
+  "schema_version": "sec-retrieval-eval-1.0",
+  "queries": [
+    {
+      "query_id": "synthetic-risk-1",
+      "query": "What synthetic risks could reduce revenue?",
+      "filters": {"symbol": "TEST", "form": "10-K", "as_of": "2024-12-31"},
+      "expected_chunk_ids": ["synthetic-chunk-risk"],
+      "expected_accession": "0000000001-24-000001",
+      "expected_section": "Risk Factors",
+      "evidence_rationale": "Synthetic evidence explicitly describes a revenue risk.",
+      "label_status": "synthetic",
+      "provenance": "tests/fixtures only"
+    },
+    {
+      "query_id": "synthetic-liquidity-1",
+      "query": "How does the synthetic company describe liquidity?",
+      "filters": {"symbol": "TEST", "form": "10-Q", "as_of": "2024-12-31"},
+      "expected_chunk_ids": ["synthetic-chunk-liquidity"],
+      "expected_accession": "0000000001-24-000002",
+      "expected_section": "Management Discussion",
+      "evidence_rationale": "Synthetic evidence explicitly discusses liquidity.",
+      "label_status": "synthetic",
+      "provenance": "tests/fixtures only"
+    }
+  ]
+}
