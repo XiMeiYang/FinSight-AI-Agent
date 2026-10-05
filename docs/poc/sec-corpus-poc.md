@@ -1,5 +1,23 @@
 # 多公司 SEC 语料 PoC
 
+## 2026-10-05 真实小批量结果
+
+已完成 10/10 个完整 bundle（5 份 10-K、5 份 10-Q，每家公司 2 份）。本轮执行正文下载、HTML 清洗、文档解析、section 识别、chunks 与 citation 字段保存；不是完整 RAG。
+
+| 公司 | K/Q | raw bytes | sections | chunks | earliest / latest filing | fail |
+| --- | --- | ---: | ---: | ---: | --- | ---: |
+| AMD | 1/1 | 3,523,416 | 64 | 416 | 2026-02-04 / 2026-08-05 | 0 |
+| AVGO | 1/1 | 4,430,060 | 68 | 377 | 2025-12-18 / 2026-09-10 | 0 |
+| INTC | 1/1 | 5,037,625 | 134 | 470 | 2026-01-23 / 2026-07-24 | 0 |
+| NVDA | 1/1 | 3,485,085 | 66 | 332 | 2026-02-25 / 2026-08-26 | 0 |
+| QCOM | 1/1 | 3,097,332 | 67 | 408 | 2025-11-05 / 2026-07-29 | 0 |
+
+网络统计：`request_count=12`、`retry_count=2`、`downloaded_bytes=19,573,518`、`network_executed=true`、`model_calls=0`、`status=completed`；redirect/rate_limit/timeout：本次命令结果未提供，未补造。
+
+10 个 accession/form/raw SHA-256：AMD K `0000002488-26-000018`=`dc4fe1861debf22b74ef63e399070981f5fdcabc83e0bc94a7030c9e21386518`，Q `0000002488-26-000123`=`86500b5f6a6941e2758fc3abca9de77b2a2030f979adceb2da6cef645348450c`；AVGO K `0001730168-25-000121`=`57feb19f73fcfc78b22a476d835283f108c22e8216f4de7b3db39b8e8c8984df`，Q `0001730168-26-000080`=`b7a953ad4a2cd22a8e610f77c3b919c48431497806535d4fccbf96683a7b42d3`；INTC K `0000050863-26-000011`=`7240f6252d0793468493efe434b1c785dd841b46b26dddb77bb960c6b2096aa6`，Q `0000050863-26-000157`=`6750ee732b82561433f4204dff107d65ca6a8c63e4479c7df96d7266afc286d1`；NVDA K `0001045810-26-000021`=`59efa41a63393efa51c9932825923ff9805177b0fc7cd5bb7d0f6762abac09e2`，Q `0001045810-26-000075`=`7c288c7fb2fe257284d815b40508cfaa782fee9f57a1c91bd4743ea5f580dfe7`；QCOM K `0000804328-25-000085`=`32471cc5ff989593805ffcc5b6c4de70cda4c5c284b0a2bc35750050ee4427a9`，Q `0000804328-26-000086`=`da5857ad3e1ee490122d38cd267eccc63b74b0c0d525e164d29f03485e696295`。
+
+Corpus aggregate SHA-256：`45172c8250de63166d9d270e5d3081712881516f8614def07131ea2a9b4f6d27`（按 ticker/accession 排序的五文件 SHA 映射 canonical JSON）；candidate manifest SHA-256：`ed176273d95d197973df538b4ea2282a5f9efb9f8b15d32238c54756ba916276`。SEC 正文可能自带公开联系字符串，仅留 gitignored 本地证据，不回显、不记录具体值，且不等于 User-Agent 泄漏。100 份仍为候选，剩余 90 份未下载；下一步确认离线检索/评测方案。
+
 状态（2026-09-26）：候选清单已完成，五家公司共确认 100 份候选（每家最多 5 份 10-K、15 份 10-Q）。上一阶段 submissions metadata refresh 共 4 次 SEC 请求；本阶段正文下载请求为 0。100 份是候选，不是已下载语料；完成下一轮验收前不能称为完整 RAG。
 
 ## 离线小批量计划
@@ -26,4 +44,4 @@ PYTHONPATH=src python3 scripts/build_sec_corpus.py \
 
 ## 边界
 
-正文下载仍必须显式传入 `--network` 并配置 `FINSIGHT_SEC_USER_AGENT`；缺失 User-Agent、manifest 无效、预算非法、输出路径不安全或身份冲突均在首个网络请求前停止。本轮不执行 ingestion、Embedding、向量数据库或 LLM。下一轮只执行上述最多 10 份小批量真实正文下载，独立验收通过后再决定后续范围。
+正文下载仍必须显式传入 `--network` 并配置 `FINSIGHT_SEC_USER_AGENT`；缺失 User-Agent、manifest 无效、预算非法、输出路径不安全或身份冲突均在首个网络请求前停止。本轮已完成上述最多 10 份小批量真实正文下载；下一步确认离线检索/评测方案。

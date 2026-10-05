@@ -1,8 +1,14 @@
 # SEC RAG 摄取 PoC
 
+补充状态（2026-10-05）：`network_executed=true`、`status=completed`、corpus aggregate SHA-256=`45172c...`；本轮完成正文下载、HTML 清洗、解析、section、chunks 与 citation，未实现 Embedding/BM25/RRF/Reranker/LLM/Agent。
+
+## 2026-10-05 真实小批量结果
+
+已完成 10/10 个真实 filing bundle（5 K、5 Q）：19,573,518 raw bytes、399 sections、2,003 chunks；request 12、retry 2、failed 0、model_calls 0。100 份仍为候选，剩余 90 份未下载；本轮不是完整 RAG。下一步确认离线检索/评测方案。
+
 截至 2026-09-26，本阶段完成离线 SEC 文档解析、章节识别、确定性分块、SHA-256 溯源和安全契约校验。`build_sec_chunks.py` 只读取 `.local_data` 下显式指定的文件，输出 document/chunks/manifest，并以临时目录批量原子替换；不会联网、调用模型或写入向量库。
 
-正文下载器加固同样只完成离线验证：100 份为候选清单，本轮正文请求为 0；下一轮先验收最多 10 份最新 10-K/10-Q，完成验收前不称为完整 RAG。
+正文下载器已完成最多 10 份最新 10-K/10-Q 的真实验收；100 份仍为候选，完成检索验收前不称为完整 RAG。
 
 ## 输入与约束
 
@@ -35,4 +41,4 @@ PYTHONPATH=src python3 scripts/build_sec_corpus.py \
   --output /tmp/sec-candidates.json
 ```
 
-五家公司 submissions 与 100 份候选清单已完成验证；本轮正文下载为 0，不能将候选数量描述为完整 corpus。
+五家公司 submissions 与 100 份候选清单已完成验证；本轮正文下载仅完成 10 份，不能将候选数量描述为完整 corpus。

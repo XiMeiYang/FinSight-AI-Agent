@@ -1,5 +1,11 @@
 # 开发计划
 
+补充状态（2026-10-05）：`network_executed=true`、`status=completed`、corpus aggregate SHA-256=`45172c...`；本轮已完成正文下载、HTML 清洗、解析、section、chunks 与 citation。未实现 Embedding/BM25/RRF/Reranker/LLM/Agent/前端/数据库/邮件。
+
+## 2026-10-05 SEC 真实小批量结果
+
+完成五家公司各最新 10-K/10-Q 的 10 份真实下载与独立验收（10/10 bundles，5 K + 5 Q，19,573,518 raw bytes，399 sections，2,003 chunks，request 12、retry 2、failed 0、model_calls 0）。100 份仍是候选，剩余 90 份未下载；尚未实现 Embedding、BM25、RRF、Reranker、LLM、Agent、前端、数据库或邮件。下一步确认离线检索/评测方案。
+
 ## 已完成的离线 SEC 数据 PoC
 
 SEC EDGAR/Company Facts 的标准库离线实现和固定 synthetic fixture 验证已完成；已完成一次用户执行的 NVDA 在线 smoke；许可确认、持续数据质量和生产接入仍未完成。可点击原型已完成，但真实原型可用性测试由用户决定暂缓，仍未执行。
@@ -71,4 +77,4 @@ P0/P1/P2 是实现顺序，不删除已确认功能。普通 K 线、复杂 Dash
 
 上一阶段已完成五家公司 submissions metadata refresh（4 次 SEC 请求）；本阶段正文下载为 0。当前已完成离线解析、分块、证券目录和覆盖状态契约；embedding、向量库、RAG、Agent 与前端仍待实现。
 
-2026-09-26：正文下载器加固完成离线验证。100 份仅为候选清单；本轮下载正文请求为 0。下一轮先做五家公司各最新 10-K/10-Q、最多 10 份小批量，验收前不称为完整 RAG。
+2026-09-26：正文下载器加固完成离线验证。100 份仅为候选清单；后续已完成五家公司各最新 10-K/10-Q 的最多 10 份小批量，验收前不称为完整 RAG。

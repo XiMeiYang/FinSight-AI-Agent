@@ -1,5 +1,11 @@
 # FinSight AI Agent
 
+补充状态（2026-10-05）：`network_executed=true`、`status=completed`、corpus aggregate SHA-256=`45172c...`；本轮完成正文下载、HTML 清洗、解析、section、chunks 与 citation，未实现 Embedding/BM25/RRF/Reranker/LLM/Agent/前端/数据库/邮件。
+
+## 2026-10-05 SEC 真实正文小批量
+
+已完成五家公司各最新 10-K/10-Q 的 10 份真实 bundle（5 K + 5 Q；19,573,518 raw bytes、399 sections、2,003 chunks；request 12、retry 2、failed 0、model_calls 0）。100 份是已确认候选，剩余 90 份未下载；本轮不是完整 RAG。下一步确认离线检索/评测方案，尚未实现 Embedding、BM25、RRF、Reranker、LLM、Agent、前端、数据库或邮件。
+
 《基于大语言模型与多智能体协作的智能金融分析 AI Agent》
 
 FinSight = Finance + Sight，意为“金融洞察”。定位为个人投资者和金融分析学习者的智能金融研究与自选股监测系统。
@@ -89,4 +95,4 @@ ResearchSnapshot 1.1 已增加离线 Excel 导出路径：导出器和 synthetic
 
 已加入离线 SEC HTML 清洗、章节识别、确定性分块、哈希校验、`SecurityCatalog` 和独立 `RAGCoverage` 状态。上一阶段五家公司 submissions metadata refresh 实际执行 4 次 SEC 请求；本阶段正文下载请求为 0。多公司候选脚本覆盖 NVDA、AMD、INTC、AVGO、QCOM，尚未实现 embedding、向量数据库、Reranker、LLM、Agent 或前端接入。详见 [SEC RAG 摄取 PoC](docs/poc/sec-rag-ingestion-poc.md) 与 [多公司 SEC 语料 PoC](docs/poc/sec-corpus-poc.md)。
 
-正文下载器已加入离线 dry-run、稳定小批量选择、预算预检、五类产物批次提交与失败回滚。100 份是已确认候选，不是已下载正文；下一轮先执行每家公司最新 10-K/10-Q 的最多 10 份小批量，完成验收前不称为完整 RAG。
+正文下载器已加入离线 dry-run、稳定小批量选择、预算预检、五类产物批次提交与失败回滚。100 份是已确认候选，已完成其中 10 份正文 bundle；完成检索验收前不称为完整 RAG。
