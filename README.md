@@ -1,10 +1,10 @@
 # FinSight AI Agent
 
-补充状态（2026-10-05）：在既有 10 份真实 filing、2,003 chunks 上已实现并实跑完全离线 BM25 索引、过滤搜索和 provisional 诊断评测；本轮 `network_executed=false`、`model_calls=0`。BM25 只是词法检索 baseline，不是完整 RAG；Embedding、RRF、Reranker、LLM 回答、Agent、前端、数据库和邮件仍未实现。
+补充状态（2026-10-06）：在既有 10 份真实 filing、2,003 chunks 上已实现并实跑 BM25 与本地 Dense BGE 检索。Dense 使用固定 revision 的 `BAAI/bge-small-en-v1.5`，2,003 chunks 全部编码；运行期离线且 `model_calls=0`。冻结的 20 条开发者诊断查询上，Dense Hit@10 0.70，低于 BM25 的 0.75，因此不能宣称整体改善。Hybrid/RRF、Reranker、LLM 回答、Agent、前端、数据库和邮件仍未实现。
 
 ## 2026-10-05 SEC 真实正文小批量
 
-已完成五家公司各最新 10-K/10-Q 的 10 份真实 bundle（5 K + 5 Q；19,573,518 raw bytes、399 sections、2,003 chunks），并建立 14,406 词表的 BM25 索引。20 条 `provisional_developer_authored` 查询仅用于诊断：每家公司 4 条、10-K/10-Q 各 10 条；不是用户真实查询，样本小且存在构造偏差，指标不能称为生产准确率。详见 [SEC BM25 检索 PoC](docs/poc/sec-bm25-retrieval-poc.md)。100 份仍只是候选，剩余 90 份未下载。
+已完成五家公司各最新 10-K/10-Q 的 10 份真实 bundle（5 K + 5 Q；19,573,518 raw bytes、399 sections、2,003 chunks），并建立 BM25 与 384 维 Dense 索引。用户决定暂缓独立真实查询收集；20 条 `provisional_developer_authored` 查询仍仅用于诊断，不是生产准确率。详见 [SEC BM25 检索 PoC](docs/poc/sec-bm25-retrieval-poc.md) 与 [SEC Dense Embedding 检索 PoC](docs/poc/sec-embedding-retrieval-poc.md)。100 份仍只是候选，剩余 90 份未下载。
 
 《基于大语言模型与多智能体协作的智能金融分析 AI Agent》
 
@@ -89,10 +89,10 @@ ResearchSnapshot 1.1 已增加离线 Excel 导出路径：导出器和 synthetic
 
 ### SEC RAG ingestion PoC
 
-已实现离线 SEC 正文清洗、章节识别和确定性字符分块。当前未实现 embedding、向量检索、LLM 问答或 Agent。真实 NVDA filing 正文当前未确认，synthetic 测试已完成。
+该阶段实现离线 SEC 正文清洗、章节识别和确定性字符分块；后续已完成 10 份真实正文及本地 Dense 检索。LLM 问答与 Agent 仍未实现。
 
 ## SEC 文档解析与覆盖状态（2026-09-26）
 
-已加入离线 SEC HTML 清洗、章节识别、确定性分块、哈希校验、`SecurityCatalog` 和独立 `RAGCoverage` 状态。上一阶段五家公司 submissions metadata refresh 实际执行 4 次 SEC 请求；本阶段正文下载请求为 0。多公司候选脚本覆盖 NVDA、AMD、INTC、AVGO、QCOM，尚未实现 embedding、向量数据库、Reranker、LLM、Agent 或前端接入。详见 [SEC RAG 摄取 PoC](docs/poc/sec-rag-ingestion-poc.md) 与 [多公司 SEC 语料 PoC](docs/poc/sec-corpus-poc.md)。
+已加入离线 SEC HTML 清洗、章节识别、确定性分块、哈希校验、`SecurityCatalog` 和独立 `RAGCoverage` 状态。上一阶段五家公司 submissions metadata refresh 实际执行 4 次 SEC 请求；该 ingestion 阶段正文下载请求为 0，后续另行完成 10 份小批量。多公司候选脚本覆盖 NVDA、AMD、INTC、AVGO、QCOM；当前已实现本地 embedding 矩阵检索，但未引入向量数据库、Reranker、LLM、Agent 或前端接入。详见 [SEC RAG 摄取 PoC](docs/poc/sec-rag-ingestion-poc.md) 与 [多公司 SEC 语料 PoC](docs/poc/sec-corpus-poc.md)。
 
-正文下载器已加入离线 dry-run、稳定小批量选择、预算预检、五类产物批次提交与失败回滚。100 份是已确认候选，已完成其中 10 份正文 bundle；已实现可复现 BM25 baseline 和诊断评测，但完成语义检索、融合、重排、回答与引用核验前仍不称为完整 RAG。
+正文下载器已加入离线 dry-run、稳定小批量选择、预算预检、五类产物批次提交与失败回滚。100 份是已确认候选，已完成其中 10 份正文 bundle；已实现可复现 BM25 baseline、本地 Dense 检索和同口径诊断评测，但融合、重排、回答与引用核验仍未实现，因此不称为完整 RAG。

@@ -1,10 +1,10 @@
 # 开发计划
 
-补充状态（2026-10-05）：已在 10 份真实 filing、2,003 chunks 上完成完全离线 BM25 baseline、过滤搜索和 provisional 诊断评测，本轮 `network_executed=false`、`model_calls=0`。未实现 Embedding、RRF、Reranker、LLM 回答、Agent、前端、数据库或邮件。
+补充状态（2026-10-06）：已在 10 份真实 filing、2,003 chunks 上完成 BM25 与本地 Dense BGE 检索和同口径 provisional 诊断评测。模型首次下载使用网络；index build、search、evaluation 均离线且 `model_calls=0`。未实现 RRF、Reranker、LLM 回答、Agent、前端、数据库或邮件。
 
 ## 2026-10-05 SEC 真实小批量结果
 
-完成五家公司各最新 10-K/10-Q 的 10 份真实下载与独立验收（10/10 bundles，5 K + 5 Q，19,573,518 raw bytes，399 sections，2,003 chunks），并构建 14,406 词表的 BM25 索引。20 条开发者 provisional 查询仅是当前 corpus 的诊断样本，不是用户真实查询或生产准确率。100 份仍是候选，剩余 90 份未下载；下一步应由用户任务形成独立查询集，再决定是否实现 Embedding 对照。RRF、Reranker、LLM、Agent、前端、数据库和邮件仍未实现。
+完成五家公司各最新 10-K/10-Q 的 10 份真实下载与独立验收（10/10 bundles，5 K + 5 Q，19,573,518 raw bytes，399 sections，2,003 chunks），并构建 BM25 与本地 BGE Dense 索引。用户决定暂缓独立真实查询收集，20 条开发者 provisional 查询继续作为诊断样本。Dense Hit@10 0.70、BM25 0.75；Dense 仅找回 2/5 个 BM25 Top-10 失败，不夸大改善。100 份仍是候选，剩余 90 份未下载；下一步可在维持冻结诊断集的前提下设计 Hybrid/RRF 实验，但 RRF、Reranker、LLM、Agent、前端、数据库和邮件仍未实现。
 
 ## 已完成的离线 SEC 数据 PoC
 
@@ -71,7 +71,7 @@ P0/P1/P2 是实现顺序，不删除已确认功能。普通 K 线、复杂 Dash
 
 当前阶段增加离线 ResearchSnapshot Excel 导出与重新打开验证。真实数据只保存在 `.local_data`，不提交；RAG、LLM、多 Agent、数据库、邮件、前端连接和部署仍未完成。
 
-当前阶段增加 SEC 离线 ingestion PoC：解析、清洗、章节和字符分块。下一步才评估 embedding 与检索，不能将本轮称为完整 RAG。
+该阶段增加 SEC 离线 ingestion PoC：解析、清洗、章节和字符分块；后续已完成 BM25 与本地 Dense 检索，但仍不能称为完整 RAG。
 
 ### 当前开发状态（2026-09-26）
 

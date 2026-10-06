@@ -1,0 +1,5 @@
+#!/usr/bin/env python3
+import argparse,json
+from finsight_rag.embeddings import BGEEmbedder
+from finsight_rag.dense_retrieval import search_dense
+p=argparse.ArgumentParser(); p.add_argument('--index',required=True); p.add_argument('--corpus',required=True); p.add_argument('--query',required=True); p.add_argument('--top-k',type=int,default=10); p.add_argument('--symbol'); p.add_argument('--form'); p.add_argument('--as-of'); p.add_argument('--model-name',default='BAAI/bge-small-en-v1.5'); p.add_argument('--model-revision',required=True); p.add_argument('--batch-size',type=int,default=32); p.add_argument('--cache-folder',default='.local_data/models/hub'); p.add_argument('--offline',action='store_true',required=True); a=p.parse_args(); e=BGEEmbedder(a.model_name,a.model_revision,a.batch_size,a.cache_folder,local_files_only=a.offline); print(json.dumps({'status':'completed','network_executed':e.network_executed,'llm_calls':0,'results':search_dense(a.index,a.corpus,a.query,e,top_k=a.top_k,symbol=a.symbol,form=a.form,as_of=a.as_of)},ensure_ascii=False,sort_keys=True))

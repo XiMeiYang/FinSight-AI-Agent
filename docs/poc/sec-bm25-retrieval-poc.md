@@ -4,7 +4,7 @@
 
 2026-10-05 在已验收的 10 份真实 SEC filing（5 份 10-K、5 份 10-Q）、399 sections、2,003 chunks 上完成一次完全离线的 BM25 Okapi baseline。corpus aggregate SHA-256 为 `45172c8250de63166d9d270e5d3081712881516f8614def07131ea2a9b4f6d27`；本轮检索流程 `network_executed=false`、`model_calls=0`。
 
-这是词法检索基线，不是完整 RAG。Embedding、向量数据库、RRF、Reranker、LLM 回答、Agent 和前端真实连接均未实现。
+这是词法检索基线，不是完整 RAG。后续已完成本地 Dense Embedding 对照，详见 [SEC Dense Embedding 检索 PoC](sec-embedding-retrieval-poc.md)；向量数据库、RRF、Reranker、LLM 回答、Agent 和前端真实连接仍未实现。
 
 ## 可复现实现
 
