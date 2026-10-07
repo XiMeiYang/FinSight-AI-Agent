@@ -6,9 +6,15 @@ import unittest
 
 
 APP_JS = Path(__file__).resolve().parents[1] / "prototype" / "app.js"
+INDEX_HTML = APP_JS.with_name("index.html")
 
 
 class LocalAppFrontendTests(unittest.TestCase):
+    def test_html_versions_updated_static_assets(self):
+        html = INDEX_HTML.read_text(encoding="utf-8")
+        self.assertIn('app.js?v=sec-evidence-20261008', html)
+        self.assertIn('styles.css?v=sec-evidence-20261008', html)
+
     def test_evidence_layout_and_escaping(self):
         script = r"""
 const fs = require('fs');
