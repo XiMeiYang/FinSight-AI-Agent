@@ -1,6 +1,6 @@
 # 开发计划
 
-补充状态（2026-10-07）：已在 10 份真实 filing、2,003 chunks 上完成 BM25、Dense BGE 与固定 RRF 的同口径 provisional 诊断评测。Hybrid Hit@10 0.85，但 MRR@10 仍低于 BM25；运行完全离线且 `model_calls=0`。未实现 Reranker、LLM 回答、Agent、前端、数据库或邮件。
+补充状态（2026-10-07）：已在 10 份真实 filing、2,003 chunks 上完成 BM25、Dense BGE 与固定 RRF 的同口径 provisional 诊断评测。Hybrid Hit@10 0.85，但 MRR@10 仍低于 BM25；运行完全离线且 `model_calls=0`。随后按用户决定完成本机 SEC 证据检索网页和只读 API，用户可实际选择公司、输入英文问题并查看真实来源。未实现 Reranker、LLM 回答、Agent、数据库或邮件；其余原型页面仍为 Mock。
 
 ## 2026-10-05 SEC 真实小批量结果
 

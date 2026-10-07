@@ -37,3 +37,5 @@ Hybrid 找回 3 个 BM25 Top-10 失败，并找回 3 个 Dense Top-10 失败。�
 完整结果只保存在 `.local_data/rag/evaluation/sec-hybrid-rrf-provisional-2026-09-18.json`，大小 53,099 bytes，SHA-256 为 `ecc192da7e828ba4701cc1d20de20789acdb2d08c131ea04dbe6f7fc639a76bb`，不提交 Git。结果内记录冻结查询、corpus、BM25、Dense 产物与模型 revision 的 provenance；仓库仅记录实现、synthetic 测试和本汇总，不包含真实查询、chunk ID 或证据文本。
 
 本轮没有建立第三份索引，也未实现 Reranker、LLM 回答、前端接入或完整 RAG。下一步若继续，应先分析三个 Hybrid 失败及一个 BM25 独有证据丢失，再决定是否进入固定 Reranker 实验；不能在当前诊断集上反复调 RRF 参数。
+
+后续状态（2026-10-07）：用户明确决定本轮不继续失败分析或 RRF 调参，而先把此冻结实现接入本机网页。已完成只读证据检索应用，见 [本地 SEC 应用](local-sec-search-app.md)；上述检索实验结论与参数未改变，也未增加 LLM 回答或完整 RAG。

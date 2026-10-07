@@ -1,8 +1,10 @@
 # 技术方案
 
-状态：多 Agent、金融 RAG、Point-in-Time 与可追溯数据要求已确认；Agent 角色拆分、检索流程和具体技术栈为暂定或候选方案。Python、SQL 是确定的能力展示要求，框架、模型、数据库和行情最终供应商待定，未部署任何服务。
+状态：多 Agent、金融 RAG、Point-in-Time 与可追溯数据要求已确认；Agent 角色拆分、完整检索流程和大部分技术栈仍为暂定或候选方案。Python、SQL 是确定的能力展示要求；本地 SEC 证据检索应用实际采用 FastAPI/Uvicorn，其余框架、数据库和行情最终供应商待定。没有公网或生产部署。
 
 SEC corpus 当前处于离线 PoC 阶段：100 份是已确认候选，其中 10 份正文已下载并形成 2,003 chunks。已实现 BM25、本地 BGE Dense 与固定无权重 RRF（`k=60`、两路各 50 候选），两路均在评分前执行 Point-in-Time 过滤；真实模型、索引、评测和查询集仅保存在 `.local_data`。用户决定暂缓独立真实查询收集，当前 20 条仍为开发者诊断集；Reranker、LLM 回答与完整引用核验尚未实现。
+
+2026-10-07 增加本机只读证据检索服务：`RetrievalService` 复用已有 corpus、BM25/Dense 索引与 BGE 模型校验，仅首次使用加载；FastAPI 提供 health、真实语料覆盖和证据检索接口，Uvicorn 默认仅绑定 `127.0.0.1`。原生网页展示真实 SEC 引用，并与其他 Mock 原型页面分离。请求仍在固定 RRF 前由两路分别执行证券、表单与截止时间过滤；不把检索证据等同于答案。参见 [本地 SEC 应用](poc/local-sec-search-app.md)。
 
 ## 模块划分
 

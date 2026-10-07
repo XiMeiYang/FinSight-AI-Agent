@@ -1,6 +1,10 @@
 # FinSight AI Agent
 
-补充状态（2026-10-07）：在既有 10 份真实 filing、2,003 chunks 上已实现并实跑 BM25、Dense BGE 与固定无权重 RRF。20 条开发者诊断查询上，Hybrid Hit@10 为 0.85，高于 BM25 0.75，但 MRR@10 为 0.461667，低于 BM25 0.497560；不能宣称全面改善。运行期完全离线且 `model_calls=0`。Reranker、LLM 回答、Agent、前端、数据库和邮件仍未实现。
+补充状态（2026-10-07）：在既有 10 份真实 filing、2,003 chunks 上已实现并实跑 BM25、Dense BGE 与固定无权重 RRF，并新增本机网页/API 证据检索闭环。用户可以选择当前有语料的公司、提交英文 SEC 问题并查看真实片段与 SEC 来源；仅检索，不生成 LLM 回答。20 条开发者诊断查询上，Hybrid Hit@10 为 0.85，高于 BM25 0.75，但 MRR@10 为 0.461667，低于 BM25 0.497560；不能宣称全面改善。运行期完全离线且 `llm_calls=0`。Reranker、LLM 回答、Agent、数据库和邮件仍未实现。
+
+## 本地 SEC 证据检索网页
+
+本机已有 `.local_data` 离线产物时，可使用隔离 Python 环境安装 `requirements-app.txt`，再按 [本地应用 PoC](docs/poc/local-sec-search-app.md) 的显式路径命令启动。默认地址为 <http://127.0.0.1:8000/>，只绑定本机 loopback；先只读确认 BM25、Dense、corpus、模型缓存的实际路径，不要把它们提交 Git。网页只展示真实有 SEC corpus 的 5 家公司和检索证据；旧“演示研究”等页面仍为 Mock Data。此次只实现从网页到真实离线证据的闭环，不是完整业务系统或完整 RAG。
 
 ## 2026-10-05 SEC 真实正文小批量
 
@@ -18,7 +22,7 @@ FinSight = Finance + Sight，意为“金融洞察”。定位为个人投资者
 
 2026-09-21 已加入 Alpha Vantage `TIME_SERIES_DAILY` 离线日线 PoC，默认 compact；SEC live smoke 已完成，用户也已完成一次 NVDA 日线 live smoke，但行情供应商仍未冻结。已完成 n=3 真实线上语音访谈匿名聚合，仍属于小样本定性验证。
 
-项目已完成文档初始化、官方竞品案头调研、PRD V1.0/P0-P2 优先级整理、六层数据架构建议、可点击 Web 原型和 SEC EDGAR/Company Facts 离线数据源 PoC。已新增离线 ResearchSnapshot synthetic 契约 PoC，并完成一次真实 NVDA 本地 saved_snapshot 装配；当前仍无完整可运行业务系统、数据库连接或实验结果；已完成一次用户执行的 NVDA 低频实时 smoke；基础 K 线预览与 Excel 导出预览已纳入当前 P0 原型闭环；真实 K 线功能和 Excel 文件生成仍未实现。`.codex/` 中的 Sol/Luna 模型和 low 推理配置只影响支持项目配置的后续会话，不能视为当前会话已经切换。本仓库中的架构、流程、竞品记录和原型均不能视为真实数据能力、实测结果或真实用户需求验证。
+项目已完成文档初始化、官方竞品案头调研、PRD V1.0/P0-P2 优先级整理、六层数据架构建议、可点击 Web 原型、SEC 离线数据源 PoC 和本地 SEC 证据检索网页。已完成离线 ResearchSnapshot synthetic 契约 PoC 及一次真实 NVDA 本地 saved_snapshot 装配；当前仍无完整可运行业务系统或数据库连接，网页仅有 SEC 检索使用真实数据。已完成一次用户执行的 NVDA 低频实时 smoke；基础 K 线预览与 Excel 导出预览属于 Mock 原型。`.codex/` 中的 Sol/Luna 模型和 low 推理配置只影响支持项目配置的后续会话，不能视为当前会话已经切换。本仓库中的架构、流程和竞品记录不能视为真实用户需求验证。
 
 ## 已确定的产品范围
 
@@ -63,13 +67,11 @@ FinSight = Finance + Sight，意为“金融洞察”。定位为个人投资者
 | [daily-report](skills/daily-report/SKILL.md) | 收盘报告、归档及投递流程 |
 | [agent-evaluation](skills/agent-evaluation/SKILL.md) | Agent 评测、历史复盘与结果审计 |
 
-这些 Skill 是项目内的工作流规范，尚未注册为运行时工具，也不会自动启动 Agent、监控、邮件或定时任务。当前仅运行离线检查与固定 fixture 测试，不连接新的外部服务。
+这些 Skill 是项目内的工作流规范，尚未注册为运行时工具，也不会自动启动 Agent、监控、邮件或定时任务。本地应用只读加载保存的 SEC 语料，不连接新的业务数据服务。
 
 ## 建议下一步
 
-SEC 适配器的离线边界验证和一次 NVDA 低频实时 smoke 已完成。下一步应在确认 SEC 使用政策、User-Agent、保存与再分发范围后，评估是否进行更严格的契约和持续性验证；这次 smoke 不代表生产稳定性。
-
-[用户痛点验证计划](docs/02-user-pain-points.md)、[匿名访谈聚合](docs/research/user-interview-synthesis-001.md) 和 [PRD V1.0](docs/04-prd.md) 已更新。原型可用性测试由用户决定暂缓；当前继续推进离线 ResearchSnapshot 契约，后续再装配真实保存快照。在此之前不把 RAG、多 Agent、新闻或投递写成已实现能力。完整后续顺序见 [开发计划](docs/08-development-plan.md)。
+请用户亲自打开本地 SEC 证据检索网页，选一家公司输入真实英文问题，记录能否看懂片段、日期、章节和来源链接。此前的原型可用性测试仍未执行；此步只检验首个真实可操作检索闭环，不把 RAG 回答、多 Agent、新闻或投递写成已实现能力。完整后续顺序见 [开发计划](docs/08-development-plan.md)。
 
 ## 阅读与协作
 
@@ -93,6 +95,6 @@ ResearchSnapshot 1.1 已增加离线 Excel 导出路径：导出器和 synthetic
 
 ## SEC 文档解析与覆盖状态（2026-09-26）
 
-已加入离线 SEC HTML 清洗、章节识别、确定性分块、哈希校验、`SecurityCatalog` 和独立 `RAGCoverage` 状态。上一阶段五家公司 submissions metadata refresh 实际执行 4 次 SEC 请求；该 ingestion 阶段正文下载请求为 0，后续另行完成 10 份小批量。多公司候选脚本覆盖 NVDA、AMD、INTC、AVGO、QCOM；当前已实现本地 embedding 矩阵检索，但未引入向量数据库、Reranker、LLM、Agent 或前端接入。详见 [SEC RAG 摄取 PoC](docs/poc/sec-rag-ingestion-poc.md) 与 [多公司 SEC 语料 PoC](docs/poc/sec-corpus-poc.md)。
+已加入离线 SEC HTML 清洗、章节识别、确定性分块、哈希校验、`SecurityCatalog` 和独立 `RAGCoverage` 状态。上一阶段五家公司 submissions metadata refresh 实际执行 4 次 SEC 请求；该 ingestion 阶段正文下载请求为 0，后续另行完成 10 份小批量。多公司候选脚本覆盖 NVDA、AMD、INTC、AVGO、QCOM；当前已实现本地 embedding 矩阵检索及 SEC 证据检索网页，但未引入向量数据库、Reranker、LLM 或 Agent。详见 [SEC RAG 摄取 PoC](docs/poc/sec-rag-ingestion-poc.md)、[多公司 SEC 语料 PoC](docs/poc/sec-corpus-poc.md) 与 [本地应用 PoC](docs/poc/local-sec-search-app.md)。
 
 正文下载器已加入离线 dry-run、稳定小批量选择、预算预检、五类产物批次提交与失败回滚。100 份是已确认候选，已完成其中 10 份正文 bundle；已实现 BM25、Dense 与固定 RRF 诊断评测，但 Reranker、回答与引用核验仍未实现，因此不称为完整 RAG。
