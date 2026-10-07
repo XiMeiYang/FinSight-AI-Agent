@@ -4,7 +4,7 @@
 
 2026-10-06 在已验收的 10 份真实 SEC filing、2,003 chunks 上完成单一预定模型 `BAAI/bge-small-en-v1.5` 的本地 Dense（稠密向量）检索。模型固定 revision `5c38ec7c405ec4b44b94cc5a9bb96e735b38267a`，许可证 MIT，向量维度 384，最大输入长度 512 tokens。用户决定暂缓独立真实查询收集，因此评测继续使用冻结的 20 条 `provisional_developer_authored` 诊断查询；它不是用户真实查询或生产评测集。
 
-本轮结果不支持“Dense 整体优于 BM25”：Dense Hit@10 为 0.70，BM25 为 0.75；Dense 找回原 5 条 BM25 Top-10 失败中的 2 条，同时有 3 条仅 BM25 成功。尚未实现 Hybrid/RRF、Reranker、LLM 回答、向量数据库或完整 RAG。
+本轮结果不支持“Dense 整体优于 BM25”：Dense Hit@10 为 0.70，BM25 为 0.75；Dense 找回原 5 条 BM25 Top-10 失败中的 2 条，同时有 3 条仅 BM25 成功。后续已完成 [固定 Hybrid RRF](sec-hybrid-rrf-retrieval-poc.md) 对照；Reranker、LLM 回答、向量数据库或完整 RAG 尚未实现。
 
 ## 固定实现与数据边界
 
@@ -59,4 +59,4 @@ PYTHONPATH=src python3 scripts/build_sec_embedding_index.py \
   --batch-size 32 --cache-folder .local_data/models/hub --offline
 ```
 
-运行时还应设置 `HF_HUB_OFFLINE=1`、`TRANSFORMERS_OFFLINE=1` 和 `HF_HUB_DISABLE_TELEMETRY=1`。下一步只能把 BM25 与 Dense 的互补性作为 Hybrid/RRF 候选假设，不能从这 20 条开发者查询直接推出生产效果。
+运行时还应设置 `HF_HUB_OFFLINE=1`、`TRANSFORMERS_OFFLINE=1` 和 `HF_HUB_DISABLE_TELEMETRY=1`。后续固定 RRF 实验验证了两路互补性，但仍不能从这 20 条开发者查询直接推出生产效果。

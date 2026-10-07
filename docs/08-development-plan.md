@@ -1,10 +1,10 @@
 # 开发计划
 
-补充状态（2026-10-06）：已在 10 份真实 filing、2,003 chunks 上完成 BM25 与本地 Dense BGE 检索和同口径 provisional 诊断评测。模型首次下载使用网络；index build、search、evaluation 均离线且 `model_calls=0`。未实现 RRF、Reranker、LLM 回答、Agent、前端、数据库或邮件。
+补充状态（2026-10-07）：已在 10 份真实 filing、2,003 chunks 上完成 BM25、Dense BGE 与固定 RRF 的同口径 provisional 诊断评测。Hybrid Hit@10 0.85，但 MRR@10 仍低于 BM25；运行完全离线且 `model_calls=0`。未实现 Reranker、LLM 回答、Agent、前端、数据库或邮件。
 
 ## 2026-10-05 SEC 真实小批量结果
 
-完成五家公司各最新 10-K/10-Q 的 10 份真实下载与独立验收（10/10 bundles，5 K + 5 Q，19,573,518 raw bytes，399 sections，2,003 chunks），并构建 BM25 与本地 BGE Dense 索引。用户决定暂缓独立真实查询收集，20 条开发者 provisional 查询继续作为诊断样本。Dense Hit@10 0.70、BM25 0.75；Dense 仅找回 2/5 个 BM25 Top-10 失败，不夸大改善。100 份仍是候选，剩余 90 份未下载；下一步可在维持冻结诊断集的前提下设计 Hybrid/RRF 实验，但 RRF、Reranker、LLM、Agent、前端、数据库和邮件仍未实现。
+完成五家公司各最新 10-K/10-Q 的 10 份真实下载与独立验收，并构建 BM25 与本地 BGE Dense 索引。固定无权重 RRF 已实跑：Hit@10 从最佳单路 0.75 提升到 0.85，但 MRR@10 未超过 BM25，且丢失 1 条 BM25 独有 Top-10 命中。20 条开发者 provisional 查询不是生产评测。100 份仍是候选，剩余 90 份未下载；Reranker、LLM、Agent、前端、数据库和邮件仍未实现。
 
 ## 已完成的离线 SEC 数据 PoC
 
