@@ -28,10 +28,10 @@ from .retrieval_service import RetrievalService
 
 class EvidenceRequest(BaseModel):
     symbol: str = Field(min_length=1, max_length=10)
-    question: str = Field(min_length=1, max_length=2000)
+    question: str = Field(min_length=3, max_length=1000)
     form: Optional[str] = None
     as_of: Optional[str] = None
-    top_k: int = Field(default=10, ge=1, le=50)
+    top_k: int = Field(default=10, ge=1, le=10)
 
     if FastAPI is not None:
         @field_validator("symbol")
@@ -39,8 +39,9 @@ class EvidenceRequest(BaseModel):
 
         @field_validator("question")
         def non_blank_question(cls, value):
-            if not value.strip(): raise ValueError("question must not be blank")
-            return value.strip()
+            value = value.strip()
+            if len(value) < 3: raise ValueError("question must contain at least three characters")
+            return value
 
         @field_validator("form")
         def normalize_form(cls, value):
@@ -53,6 +54,20 @@ class EvidenceRequest(BaseModel):
 def create_app(service: RetrievalService, static_dir=None):
     if FastAPI is None: raise RuntimeError("FastAPI and Uvicorn are required; install requirements-app.txt")
     app = FastAPI(title="FinSight SEC Evidence", version="0.1.0")
+
+    @app.middleware("http")
+    async def request_size_limit(request: Request, call_next):
+        limit = 16 * 1024
+        declared_size = request.headers.get("content-length")
+        if declared_size and declared_size.isdigit() and int(declared_size) > limit:
+            return JSONResponse(status_code=413, content={"detail": "request body too large"})
+        body = bytearray()
+        async for chunk in request.stream():
+            body.extend(chunk)
+            if len(body) > limit:
+                return JSONResponse(status_code=413, content={"detail": "request body too large"})
+        request._body = bytes(body)
+        return await call_next(request)
 
     @app.exception_handler(RequestValidationError)
     async def invalid_request(_request: Request, _error: RequestValidationError):
@@ -78,8 +93,11 @@ def create_app(service: RetrievalService, static_dir=None):
             cutoff = request.as_of or service.health()["corpus_as_of"]
             if cutoff is not None and parse_time(cutoff, date_only_end=True) > parse_time(service.health()["corpus_as_of"], date_only_end=True):
                 raise HTTPException(status_code=400, detail="as_of exceeds corpus cutoff")
-            return service.search(query=request.question, symbol=request.symbol, form=request.form,
+            payload = service.search(query=request.question, symbol=request.symbol, form=request.form,
                 as_of=cutoff, top_k=request.top_k)
+            evidence = payload.get("evidence", payload.get("results", []))
+            return {**payload, "status": "completed", "answer_status": "not_generated", "evidence": evidence,
+                    "results": evidence}
         except HTTPException: raise
         except (ValueError, TypeError) as exc: raise HTTPException(status_code=400, detail="invalid offline retrieval request") from exc
         except Exception as exc: raise HTTPException(status_code=503, detail="offline retrieval failed") from exc

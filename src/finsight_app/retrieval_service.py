@@ -8,6 +8,7 @@ from finsight_rag.dense_retrieval import load_dense_index
 from finsight_rag.embeddings import BGEEmbedder
 from finsight_rag.hybrid_retrieval import require_offline_environment, search_loaded_hybrid, validate_compatible_indexes
 from finsight_rag.retrieval import load_index
+from .evidence_presenter import present_results
 
 
 class RetrievalService:
@@ -81,6 +82,8 @@ class RetrievalService:
         result = search_loaded_hybrid(self.bm25_manifest, self.bm25_rows, self.bm25,
             self.dense_manifest, self.dense_rows, self.dense_matrix, self._embedder, **kwargs)
         health = self.health()
+        result["results"] = present_results(result.get("results", []), self.bm25_rows,
+                                             kwargs.get("query", ""))
         return {**result, "data_mode": "saved_sec_corpus", "retrieval_mode": "hybrid_rrf",
                 "corpus_as_of": health["corpus_as_of"], "model_name": health["model_name"],
                 "model_revision": health["model_revision"]}

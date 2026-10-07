@@ -56,9 +56,12 @@ class FakeService:
             "results": [{
                 "rank": 1, "symbol": "SYN", "company_name": "Synthetic Co", "cik": "0000000001",
                 "form": "10-K", "accession_number": "0000000001-26-000001",
-                "filing_date": "2026-01-01", "section": "Risk Factors", "chunk_id": "synthetic-chunk",
+                "filing_date": "2026-01-01", "section": "Risk Factors", "section_id": "section-1",
+                "section_title": "Risk Factors", "chunk_index": 0, "chunk_id": "synthetic-chunk",
                 "source_url": "https://www.sec.gov/Archives/synthetic.htm",
-                "evidence_preview": "synthetic evidence",
+                "evidence_preview": "synthetic evidence", "evidence_excerpt": "synthetic evidence",
+                "excerpt_truncated": False, "matched_terms": ["risk"], "retrieved_by": "both",
+                "bm25_rank": 1, "dense_rank": 2, "rrf_score": 0.03,
             }],
         }
 
@@ -87,6 +90,35 @@ class LocalAppTests(unittest.TestCase):
         self.assertEqual(response.json()["results"][0]["evidence_preview"], "synthetic evidence")
         self.assertEqual(self.service.search_args, {"query": "What are risks?", "symbol": "SYN", "form": None, "as_of": AS_OF, "top_k": 1})
         self.assertEqual(response.json()["llm_calls"], 0)
+
+    def test_search_contract_has_not_generated_evidence_and_audit_fields(self):
+        payload = self.client.post("/api/sec/evidence-search", json={"symbol": "SYN", "question": "risk", "top_k": 10}).json()
+        self.assertEqual(payload["status"], "completed")
+        self.assertEqual(payload["answer_status"], "not_generated")
+        self.assertEqual(payload["retrieval_mode"], "hybrid_rrf")
+        self.assertIs(payload["network_executed"], False)
+        evidence = payload["evidence"][0]
+        for key in ("rank", "chunk_id", "symbol", "company_name", "form", "filing_date",
+                    "accession_number", "section_id", "section_title", "chunk_index",
+                    "evidence_excerpt", "excerpt_truncated", "matched_terms",
+                    "source_url", "retrieved_by", "bm25_rank", "dense_rank", "rrf_score"):
+            self.assertIn(key, evidence)
+
+    def test_top_k_eleven_is_rejected_and_ten_is_accepted(self):
+        self.assertEqual(self.client.post("/api/sec/evidence-search", json={"symbol": "SYN", "question": "risk", "top_k": 10}).status_code, 200)
+        self.assertEqual(self.client.post("/api/sec/evidence-search", json={"symbol": "SYN", "question": "risk", "top_k": 11}).status_code, 422)
+
+    def test_large_body_is_rejected_without_echoing_input(self):
+        response = self.client.post("/api/sec/evidence-search", content=(b"x" * (16 * 1024 + 1)), headers={"content-type": "application/json"})
+        self.assertEqual(response.status_code, 413)
+        self.assertNotIn("x" * 100, response.text)
+
+    def test_streamed_body_without_declared_length_is_capped(self):
+        chunks = iter((b"x" * 8192, b"y" * 8192, b"z"))
+        response = self.client.post("/api/sec/evidence-search", content=chunks,
+                                    headers={"content-type": "application/json"})
+        self.assertEqual(response.status_code, 413)
+        self.assertEqual(response.json(), {"detail": "request body too large"})
 
     def test_form_and_earlier_cutoff_are_passed_to_hybrid_search(self):
         response = self.client.post("/api/sec/evidence-search", json={"symbol": "SYN", "question": "risk", "form": "10-q", "as_of": "2025-01-01", "top_k": 3})

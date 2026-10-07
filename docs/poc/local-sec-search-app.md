@@ -1,6 +1,6 @@
 # 本地 SEC 证据检索应用
 
-状态（2026-10-07）：已把先前验收的 10 份 SEC filing、2,003 个片段、BM25 索引、本地 BGE Dense 索引与固定无权重 RRF 接入本机网页。网页可选择当前有语料的公司并提交英文财报问题，展示真实 SEC 证据片段、排名、10-K/10-Q、申报日期、章节、CIK、accession、chunk ID 与 SEC 原始文件链接。它只做证据检索，不生成 LLM 回答，不是完整 RAG 或投资建议。
+状态（2026-10-08）：已把先前验收的 10 份 SEC filing、2,003 个片段、BM25 索引、本地 BGE Dense 索引与固定无权重 RRF 接入本机网页。根据用户实际检索 NVDA 后的可读性反馈，本轮仅调整确定性的原文句子窗口、结果折叠与接口契约；不改变检索排序或诊断指标。网页显示真实 SEC 证据而非 LLM 答案，不是完整 RAG 或投资建议。
 
 ## 数据与运行边界
 
@@ -33,7 +33,9 @@
 
 - `GET /api/health`：离线数据模式、检索模式、corpus 截止时间、文档/片段数、覆盖 ticker、模型名称与 revision、`network_executed=false`、`llm_calls=0`。
 - `GET /api/securities?q=`：从已加载的真实索引动态统计公司、CIK、表单、文档/片段数量与 corpus 截止时间；可按 ticker 或公司名过滤。可搜索的证券目录与已具备 RAG 语料的公司不是一回事。
-- `POST /api/sec/evidence-search`：接受 `symbol`、`question`、可选 `form` (`10-K`/`10-Q`)、`as_of`、`top_k` (1–50)，把相同过滤条件交给已有 Hybrid 检索。未来截止时间、未知公司与非法输入安全拒绝。结果为证据片段和引用定位，不是回答；默认 10 条。
+- `POST /api/sec/evidence-search`：接受 `symbol`、`question`（3–1000 字符）、可选 `form` (`10-K`/`10-Q`)、`as_of`、`top_k` (1–10)，把相同过滤条件交给已有 Hybrid 检索。请求体上限 16 KiB，超出返回稳定的 413 JSON；未来截止时间、未知公司与非法输入安全拒绝，错误不回显问题、环境路径或 traceback。成功响应含 `status=completed`、`answer_status=not_generated`、`retrieval_mode=hybrid_rrf`、`network_executed=false`、`llm_calls=0`、`evidence`。每条证据保留身份/引用字段及 `retrieved_by`、`bm25_rank`、`dense_rank`、`rrf_score`；`results` 暂作为兼容字段保留，网页只读取 `evidence`，绝不能把它们称作 answer。
+
+`evidence_excerpt` 是从原始 chunk 以问题关键词重合度确定性选择的完整句子窗口，必要时在单词边界截短并标注省略号；同时返回 `excerpt_truncated`、`matched_terms`。这里 `excerpt_truncated=true` 专指所展示的句子或 chunk 边缘片段因边界安全而被截短；仅选择若干完整句子、不展示 chunk 其他句子时为 `false`。它不是摘要、翻译或新生成的事实，原始 chunk、索引和最终排名均不更改。界面默认仅展示前 3 条，其余 4–10 条可展开；公司覆盖默认折叠，BM25/Dense/RRF 和 CIK、accession、chunk 等技术字段放在每条证据的可展开详情。结果区持续提示证据不是答案、排名不代表正确、不构成投资建议及 SEC 链接会离开本机页面。
 
 输入校验与服务异常采用固定脱敏错误，不回显原始请求值、User-Agent、邮箱或本机绝对路径。网页对结果文本做 HTML 转义，并只把允许的 `https://www.sec.gov/Archives/` 链接渲染为外部来源。
 
@@ -41,4 +43,4 @@
 
 本轮未运行冻结的 20 条诊断查询评测，没有调 RRF 参数或修改 ground truth。合成 fake-service 单元测试不读取真实 `.local_data`。一次本机 HTTP smoke 显示 `/api/health` 返回 5 家公司、10 文档、2,003 片段；NVDA 风险问题返回 10 条真实索引证据，`network_executed=false`、`llm_calls=0`，来源 URL 为 SEC Archives。另用非诊断集通用问题对 AMD、INTC、AVGO、QCOM 各做 1 条连通性检索，四次均返回 1 个证据片段与零业务联网/LLM 状态。网页交互已在本机浏览器验证能展示公司覆盖和证据卡片。此 smoke 不是检索质量评测或真实用户可用性测试。
 
-仍未实现 Reranker、LLM 回答、逐结论引用核验、完整 RAG、行情连接、数据库、自选股后台、邮件或公网部署。下一步只建议让用户亲自试用此本地证据检索闭环并记录可用性反馈；不在当前诊断集上继续调参。
+仍未实现 Reranker、LLM 回答、逐结论引用核验、完整 RAG、行情连接、数据库、自选股后台、邮件或公网部署。本轮没有新增 SEC 文件，也没有重新评测或调整 RRF；下一步是由用户确认改版后的真实本机证据体验，再决定是否进入基于证据的回答阶段。

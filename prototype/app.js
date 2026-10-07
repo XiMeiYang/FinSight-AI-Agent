@@ -38,21 +38,39 @@
   function safeSecUrl(value) {
     try {
       const url = new URL(value);
-      return url.protocol === 'https:' && url.hostname === 'www.sec.gov' && url.pathname.startsWith('/Archives/') ? url.href : null;
+      return url.protocol === 'https:' && url.hostname === 'www.sec.gov' && !url.username && !url.password && (!url.port || url.port === '443') && url.pathname.startsWith('/Archives/') ? url.href : null;
     } catch (_) { return null; }
   }
 
   function evidenceCard(result) {
     const secUrl = safeSecUrl(result.source_url);
     const date = result.filing_date || result.accepted_at || '未提供';
+    const sourceLabel = {
+      both: '关键词 + 语义共同命中',
+      bm25: '关键词检索命中',
+      dense: '语义检索命中',
+    }[result.retrieved_by] || '检索来源未标注';
+    const auditValue = (value) => value === null || value === undefined || value === '' ? '未进入该路候选' : escapeHtml(value);
     const sourceLink = secUrl
       ? `<a href="${escapeHtml(secUrl)}" target="_blank" rel="noopener noreferrer">查看 SEC 原始文件 ↗</a>`
       : '<span class="muted">来源链接未通过校验</span>';
     return `<article class="card evidence-result">
       <div class="evidence-result-head"><span class="tag">第 ${escapeHtml(result.rank)} 名</span><strong>${escapeHtml(result.symbol)} · ${escapeHtml(result.company_name || '')}</strong><span class="muted">${escapeHtml(result.form)} · ${escapeHtml(date)}</span></div>
-      <p class="evidence-preview">${escapeHtml(result.evidence_preview || '')}</p>
-      <div class="evidence-meta"><span>章节：${escapeHtml(result.section || '未标注')}</span><span>CIK：${escapeHtml(result.cik || '')}</span><span>Accession：${escapeHtml(result.accession_number || '')}</span><span>Chunk：${escapeHtml(result.chunk_id || '')}</span></div>
+      <p class="evidence-section">章节：${escapeHtml(result.section_title || result.section || '未标注')}</p>
+      <p class="evidence-preview">${escapeHtml(result.evidence_excerpt || '')}</p>
+      <p class="evidence-source-tag">${sourceLabel}</p>
       <div class="evidence-source">${sourceLink}</div>
+      <details class="evidence-technical"><summary>查看技术详情</summary><dl>
+        <div><dt>BM25 rank</dt><dd>${auditValue(result.bm25_rank)}</dd></div>
+        <div><dt>Dense rank</dt><dd>${auditValue(result.dense_rank)}</dd></div>
+        <div><dt>RRF score</dt><dd>${auditValue(result.rrf_score)}</dd></div>
+        <div><dt>CIK</dt><dd>${auditValue(result.cik)}</dd></div>
+        <div><dt>Accession</dt><dd>${auditValue(result.accession_number)}</dd></div>
+        <div><dt>Chunk ID</dt><dd>${auditValue(result.chunk_id)}</dd></div>
+        <div><dt>Chunk index</dt><dd>${auditValue(result.chunk_index)}</dd></div>
+        <div><dt>Section ID</dt><dd>${auditValue(result.section_id)}</dd></div>
+        <div><dt>Corpus as-of</dt><dd>${auditValue(result.corpus_as_of)}</dd></div>
+      </dl></details>
     </article>`;
   }
 
@@ -69,11 +87,14 @@
       const options = securities.map((security) => `<option value="${escapeHtml(security.symbol)}">${escapeHtml(security.symbol)} · ${escapeHtml(security.company_name)}</option>`).join('');
       const coverage = securities.map((security) => `<div class="coverage-item"><b>${escapeHtml(security.symbol)}</b><span>${escapeHtml(security.company_name)}</span><small>CIK ${escapeHtml(security.CIK || security.cik || '未提供')}</small><small>${escapeHtml(security.document_count)} 份文件 · ${escapeHtml(security.chunk_count)} 个片段 · ${escapeHtml((security.available_forms || []).join(' / '))}</small></div>`).join('');
       render(`<section class="panel evidence-intro"><span class="tag">真实本地数据 · 仅证据检索</span><h2>在已保存的 SEC 财报中查找证据</h2><p class="muted">选择有语料的公司，输入英文问题。结果来自 BM25 关键词检索、BGE 语义检索和固定 RRF 排序，不是 LLM 回答或投资建议。</p>
-        <div class="evidence-status">语料截止：${escapeHtml(health.corpus_as_of || '未提供')} · ${escapeHtml(health.document_count)} 份文件 · ${escapeHtml(health.chunk_count)} 个片段 · 外部数据请求：无 · LLM 调用：0</div>
+        <div class="evidence-status">语料截止：${escapeHtml(health.corpus_as_of || '未提供')} · ${escapeHtml(health.document_count)} 份文件 · ${escapeHtml(Number(health.chunk_count).toLocaleString('en-US'))} 个片段 · 外部数据请求：无 · LLM 调用：0</div>
         <form id="sec-search-form" class="evidence-form"><label>公司<select name="symbol" required>${options}</select></label><label>表单<select name="form"><option value="">10-K + 10-Q</option><option value="10-K">仅 10-K</option><option value="10-Q">仅 10-Q</option></select></label><label class="question-field">英文 SEC 财报问题<input name="question" type="text" lang="en" minlength="3" maxlength="1000" required placeholder="What risks could affect demand for the company's products?"></label><button class="primary" type="submit">检索真实证据</button></form>
         <p class="small muted">只读取本机已保存的语料、索引和模型；不会下载新文件，也不会生成答案。</p></section>
-        <section class="panel coverage-panel"><div class="section-title"><h3>当前真实语料覆盖</h3><span class="muted">与证券搜索范围不同，只显示已建索引公司</span></div><div class="coverage-grid">${coverage}</div></section>
+        <details class="panel coverage-panel"><summary><span><b>当前真实语料覆盖</b><small>${escapeHtml(securities.length)} 家公司 · ${escapeHtml(health.document_count)} 份文件 · ${escapeHtml(Number(health.chunk_count).toLocaleString('en-US'))} 个片段</small></span><span class="coverage-toggle">查看覆盖公司</span></summary><p class="small muted">仅显示已建索引公司；能搜索证券不等于已有 RAG 语料。</p><div class="coverage-grid">${coverage}</div></details>
         <section id="sec-results" aria-live="polite"></section>`, 'sec-evidence', 'SEC 证据检索');
+      document.querySelector('.coverage-panel').addEventListener('toggle', (event) => {
+        event.currentTarget.querySelector('.coverage-toggle').textContent = event.currentTarget.open ? '收起覆盖公司' : '查看覆盖公司';
+      });
       document.querySelector('#sec-search-form').addEventListener('submit', async (event) => {
         event.preventDefault();
         const form = event.currentTarget;
@@ -86,10 +107,13 @@
           const response = await fetch('/api/sec/evidence-search', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ symbol: fields.get('symbol'), question: fields.get('question'), form: fields.get('form') || null, as_of: health.corpus_as_of, top_k: 10 }) });
           if (!response.ok) throw new Error(response.status === 422 ? '请输入有效的英文问题和筛选条件。' : '检索失败；请检查本地服务和语料状态。');
           const payload = await response.json();
-          const hits = Array.isArray(payload.results) ? payload.results : [];
+          const hits = Array.isArray(payload.evidence) ? payload.evidence : [];
+          if (payload.answer_status !== 'not_generated') throw new Error('服务未确认仅返回检索证据。');
+          const firstHits = hits.slice(0, 3);
+          const remainingHits = hits.slice(3);
           results.innerHTML = `<div class="section-title"><h2>检索结果</h2><span class="muted">${escapeHtml(hits.length)} 个证据片段 · 截止 ${escapeHtml(payload.filters?.as_of || health.corpus_as_of || '未提供')}</span></div>
-            <div class="notice">以下是原文证据片段及来源，不是对问题的回答。相关性排名不代表结论的正确性。</div>
-            ${hits.length ? `<div class="evidence-list">${hits.map(evidenceCard).join('')}</div>` : '<div class="panel"><p>此筛选条件下没有可用证据。请调整问题或表单；不会用模型常识补齐。</p></div>'}`;
+            <div class="notice">以下是 SEC 原文证据，不是问题答案；当前尚未调用 LLM。排名不代表结论正确，也不构成投资建议。点击 SEC 链接会访问外部 SEC 网站。</div>
+            ${hits.length ? `<div class="evidence-list">${firstHits.map(evidenceCard).join('')}</div>${remainingHits.length ? `<details class="more-evidence"><summary>查看其余 ${escapeHtml(remainingHits.length)} 条证据</summary><div class="evidence-list">${remainingHits.map(evidenceCard).join('')}</div></details>` : ''}` : '<div class="panel"><p>此筛选条件下没有可用证据。请调整问题或表单；不会用模型常识补齐。</p></div>'}`;
         } catch (error) {
           results.innerHTML = `<div class="notice" role="alert">${escapeHtml(error.message)}</div>`;
         } finally { submit.disabled = false; }
