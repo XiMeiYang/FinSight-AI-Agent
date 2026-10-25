@@ -12,8 +12,8 @@ INDEX_HTML = APP_JS.with_name("index.html")
 class LocalAppFrontendTests(unittest.TestCase):
     def test_html_versions_updated_static_assets(self):
         html = INDEX_HTML.read_text(encoding="utf-8")
-        self.assertIn('app.js?v=sec-evidence-20261008', html)
-        self.assertIn('styles.css?v=sec-evidence-20261008', html)
+        self.assertIn('app.js?v=local-ollama-rag-20261008', html)
+        self.assertIn('styles.css?v=local-ollama-rag-20261008', html)
 
     def test_evidence_layout_and_escaping(self):
         script = r"""
@@ -84,6 +84,64 @@ setTimeout(async () => {
         )
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stdout.strip(), "frontend synthetic checks passed")
+
+    def test_local_answer_click_is_opt_in_escaped_and_citation_opens_evidence(self):
+        script = r"""
+const fs = require('fs'), vm = require('vm'), assert = require('assert');
+let submitHandler, answerHandler;
+const node = () => ({innerHTML: '', textContent: '', children: [], dataset: {}, listeners: {},
+  classList: {toggle(){}, add(value){this[value]=true;}, remove(value){this[value]=false;}},
+  append(...items){this.children.push(...items);}, replaceChildren(...items){this.children=items;},
+  addEventListener(type, handler){this.listeners[type]=handler;}, setAttribute(){},
+  querySelector(){return node();}, querySelectorAll(){return [];}, closest(){return null;}, scrollIntoView(){this.scrolled=true;}});
+const app=node(), results=node(), form=node(), answerButton=node(), answerContainer=node(), coverage=node();
+form.addEventListener=(type, handler)=>{if(type==='submit') submitHandler=handler;};
+form.querySelector=()=>node();
+answerButton.addEventListener=(type, handler)=>{if(type==='click') answerHandler=handler;};
+const more=node(), evidenceCard=node(); evidenceCard.dataset.chunkId='chunk-1';
+evidenceCard.closest=()=>more; results.querySelectorAll=()=>[evidenceCard];
+const localModelCount=node();
+const nodes={'#app':app,'#sec-search-form':form,'#sec-results':results,'#generate-local-answer':answerButton,'#sec-answer':answerContainer,'.coverage-panel':coverage,'#local-model-count':localModelCount};
+const document={querySelector:key=>nodes[key]||node(), querySelectorAll:()=>[], addEventListener(){}, createElement:()=>node()};
+const malicious='<img src=x onerror=alert(1)>';
+let answerCalls=0, searchCalls=0, failAnswer=false;
+const fetch=async (url,opts)=>{
+ if(url==='/api/health')return {ok:true,json:async()=>({corpus_as_of:'2026-09-18',document_count:10,chunk_count:2003,ollama_enabled:true})};
+ if(url==='/api/securities')return {ok:true,json:async()=>({securities:[{symbol:'NVDA',company_name:'NVIDIA',document_count:2,chunk_count:10,available_forms:['10-K','10-Q']}]})};
+ if(url==='/api/sec/evidence-search'){searchCalls++;return {ok:true,json:async()=>({answer_status:'not_generated',evidence:[{rank:1,chunk_id:'chunk-1',symbol:'NVDA',company_name:'NVIDIA',form:'10-K',filing_date:'2026-01-01',evidence_excerpt:'Synthetic complete sentence.',source_url:'https://www.sec.gov/Archives/synthetic.htm'}]})};}
+ if(url==='/api/sec/answer'){answerCalls++;assert.strictEqual(JSON.parse(opts.body).top_k,10);if(failAnswer)return {ok:false,status:503,json:async()=>({detail:'本地模型暂不可用；证据仍可查看。',generation:{llm_calls:0}})};return {ok:true,json:async()=>({answer_status:'completed',model_calls:1,generation:{model:'synthetic',local_model_calls:1,llm_calls:1,total_duration_ms:4},answer:{direct_answer:{text:malicious,evidence_ids:['E1']},key_points:[{text:malicious,evidence_ids:['E1']}],limitations:[malicious]},citations:[{evidence_id:'E1',chunk_id:'chunk-1'}]})};}
+ throw Error('unexpected fetch');
+};
+class FormData {get(key){return {symbol:'NVDA',question:'What risks?',form:''}[key];}}
+vm.runInNewContext(fs.readFileSync(process.argv[1],'utf8'),{document,window:{scrollTo(){},setTimeout(){}},URL,FormData,fetch,console});
+const flatten=(item)=>[item,...item.children.flatMap(flatten)];
+setTimeout(async()=>{
+ assert.strictEqual(answerCalls,0);
+ await submitHandler({preventDefault(){},currentTarget:form});
+ assert.strictEqual(searchCalls,1);
+ assert.ok(answerHandler);
+ assert.match(results.innerHTML,/生成中文回答（本地模型）/);
+ await answerHandler();
+ assert.strictEqual(answerCalls,1);
+ assert.ok(!answerContainer.innerHTML.includes(malicious));
+ const all=flatten(answerContainer);
+ assert.ok(all.some(item=>item.textContent===malicious));
+ const citation=all.find(item=>item.className==='answer-citation');
+ assert.ok(citation); citation.listeners.click();
+ assert.strictEqual(more.open,true); assert.strictEqual(evidenceCard.scrolled,true);
+ assert.strictEqual(evidenceCard.classList['citation-highlight'],true);
+ failAnswer=true;
+ await answerHandler();
+ assert.strictEqual(answerCalls,2);
+ assert.match(results.innerHTML,/Synthetic complete sentence/);
+ assert.ok(flatten(answerContainer).some(item=>item.textContent.includes('本地模型暂不可用')));
+ assert.strictEqual(nodes['#local-model-count'].textContent,'本次检索的 LLM 调用：0');
+ process.stdout.write('opt-in answer checks passed\n');
+},0);
+"""
+        result = subprocess.run(["node", "-e", script, str(APP_JS)], capture_output=True, text=True, check=False)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.strip(), "opt-in answer checks passed")
 
 
 if __name__ == "__main__":

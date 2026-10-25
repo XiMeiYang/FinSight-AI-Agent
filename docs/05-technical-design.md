@@ -1,8 +1,12 @@
 # 技术方案
 
+本机复验边界（2026-10-25）：现有正式索引仅匹配原先 10 份 SEC 正文；本地 corpus 当前有 100 份，加载器会拒绝来源指纹不一致。独立临时目录中的 10 份副本和同参数临时索引用于本轮 Ollama 验收，正式数据、索引与冻结评测集没有改变。100 份正文当前不等于 100 份均可通过正式索引检索。
+
 状态：多 Agent、金融 RAG、Point-in-Time 与可追溯数据要求已确认；Agent 角色拆分、完整检索流程和大部分技术栈仍为暂定或候选方案。Python、SQL 是确定的能力展示要求；本地 SEC 证据检索应用实际采用 FastAPI/Uvicorn，其余框架、数据库和行情最终供应商待定。没有公网或生产部署。
 
-SEC corpus 当前处于离线 PoC 阶段：100 份是已确认候选，其中 10 份正文已下载并形成 2,003 chunks。已实现 BM25、本地 BGE Dense 与固定无权重 RRF（`k=60`、两路各 50 候选），两路均在评分前执行 Point-in-Time 过滤；真实模型、索引、评测和查询集仅保存在 `.local_data`。用户决定暂缓独立真实查询收集，当前 20 条仍为开发者诊断集；Reranker、LLM 回答与完整引用核验尚未实现。
+2026-10-08 补充最小本地 SEC 回答层：仅在 `--enable-ollama` 且用户主动点击后，服务端重复现有 Hybrid 检索，按排名给最多 10 条证据赋 E 编号，在约 12,000 字符预算内向固定 loopback 的 Ollama `qwen3:4b` 发送受限证据包；JSON Schema 限定中文回答与引用，后端验证 ID 并从原始 evidence 重新映射 SEC 来源，前端只以文本节点显示模型输出。默认模式仍零 LLM 调用，SEC/Alpha Vantage 无新增请求；Ollama 调用须单独计数。BM25、Dense、固定 RRF、Point-in-Time、索引和 corpus 不变。该闭环尚未进行完整事实一致性评测，不等于生产级 RAG。详见[本地 Ollama PoC](poc/local-ollama-sec-rag.md)。
+
+2026-10-07 的 SEC 离线检索阶段：当时 100 份是已确认候选，其中 10 份正文已下载并形成 2,003 chunks。已实现 BM25、本地 BGE Dense 与固定无权重 RRF（`k=60`、两路各 50 候选），两路均在评分前执行 Point-in-Time 过滤；真实模型、索引、评测和查询集仅保存在 `.local_data`。用户决定暂缓独立真实查询收集，20 条仍为开发者诊断集；当时尚未实现 Reranker、LLM 回答与引用核验。2026-10-25 的实际范围与旧索引/现存语料差异以上方状态核对及[本地 Ollama PoC](poc/local-ollama-sec-rag.md)为准。
 
 2026-10-07 增加本机只读证据检索服务：`RetrievalService` 复用已有 corpus、BM25/Dense 索引与 BGE 模型校验，仅首次使用加载；FastAPI 提供 health、真实语料覆盖和证据检索接口，Uvicorn 默认仅绑定 `127.0.0.1`。原生网页展示真实 SEC 引用，并与其他 Mock 原型页面分离。请求仍在固定 RRF 前由两路分别执行证券、表单与截止时间过滤；不把检索证据等同于答案。参见 [本地 SEC 应用](poc/local-sec-search-app.md)。
 

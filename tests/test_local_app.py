@@ -12,6 +12,7 @@ except ImportError:
     TestClient = None
 
 from finsight_app.api import create_app
+from finsight_app.ollama_client import OllamaModelMissing, OllamaTimeout, OllamaUnavailable
 from finsight_app.retrieval_service import RetrievalService
 
 
@@ -64,6 +65,30 @@ class FakeService:
                 "bm25_rank": 1, "dense_rank": 2, "rrf_score": 0.03,
             }],
         }
+
+
+class FakeAnswerService:
+    def __init__(self, error=None):
+        self.calls = []
+        self.error = error
+        self.model_call_count = 0
+
+    def generate(self, question, retrieval_payload):
+        self.calls.append((question, retrieval_payload))
+        if not isinstance(self.error, (OllamaModelMissing, OllamaUnavailable)):
+            self.model_call_count += 1
+        if self.error:
+            raise self.error
+        row = retrieval_payload["results"][0]
+        return {"answer_status": "completed", "answer": {"answer_status": "completed",
+            "direct_answer": {"text": "合成回答", "evidence_ids": ["E1"]},
+            "key_points": [{"text": "合成要点", "evidence_ids": ["E1"]}],
+            "limitations": ["仅合成测试"]},
+            "citations": [{"evidence_id": "E1", "chunk_id": row["chunk_id"], "source_url": row["source_url"]}],
+            "evidence": [{"evidence_id": "E1", "evidence_excerpt": row["evidence_excerpt"]}],
+            "model_calls": 1, "generation": {"provider": "ollama_local", "model": "synthetic-model",
+                "model_digest": "synthetic-digest", "local_model_calls": 1, "llm_calls": 1,
+                "external_network_executed": False}}
 
 
 @unittest.skipUnless(TestClient is not None, "install requirements-app.txt to run HTTP contracts")
@@ -168,6 +193,52 @@ class LocalAppTests(unittest.TestCase):
             client = TestClient(create_app(FakeService(), directory))
             self.assertIn("synthetic page", client.get("/").text)
             self.assertEqual(client.get("/api/health").status_code, 200)
+
+    def test_answer_disabled_does_not_call_model_or_break_evidence_search(self):
+        self.assertIs(self.client.get("/api/health").json()["ollama_enabled"], False)
+        response = self.client.post("/api/sec/answer", json={"symbol": "SYN", "question": "What risks?"})
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.json()["answer_status"], "not_generated")
+        self.assertIsNone(self.service.search_args)
+        self.assertEqual(self.client.post("/api/sec/evidence-search", json={"symbol": "SYN", "question": "What risks?"}).status_code, 200)
+
+    def test_answer_reretrieves_server_evidence_without_accepting_browser_citations(self):
+        answer_service = FakeAnswerService()
+        client = TestClient(create_app(self.service, answer_service=answer_service))
+        self.assertIs(client.get("/api/health").json()["ollama_enabled"], True)
+        response = client.post("/api/sec/answer", json={"symbol": "syn", "question": "风险是什么？", "top_k": 10})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["citations"][0]["chunk_id"], "synthetic-chunk")
+        self.assertEqual(self.service.search_args["top_k"], 10)
+        self.assertEqual(len(answer_service.calls), 1)
+        forbidden = client.post("/api/sec/answer", json={"symbol": "SYN", "question": "What risks?", "evidence": [{"source_url": "https://evil.invalid"}]})
+        self.assertEqual(forbidden.status_code, 422)
+        self.assertEqual(len(answer_service.calls), 1)
+
+    def test_answer_rejects_control_characters_and_large_body_without_echo(self):
+        client = TestClient(create_app(self.service, answer_service=FakeAnswerService()))
+        for question in ("abc\ndef", "\tWhat risks?", "a\x00bc"):
+            response = client.post("/api/sec/answer", json={"symbol": "SYN", "question": question})
+            self.assertEqual(response.status_code, 422)
+            self.assertNotIn(question, response.text)
+        response = client.post("/api/sec/answer", content=b"x" * (16 * 1024 + 1), headers={"content-type": "application/json"})
+        self.assertEqual(response.status_code, 413)
+        self.assertIsNone(self.service.search_args)
+
+    def test_answer_model_failures_are_safe_and_evidence_remains_usable(self):
+        for error, status in ((OllamaModelMissing("/private/secret"), 503),
+                              (OllamaUnavailable("/private/secret"), 503),
+                              (OllamaTimeout("/private/secret"), 504)):
+            with self.subTest(error=type(error).__name__):
+                client = TestClient(create_app(self.service, answer_service=FakeAnswerService(error)))
+                response = client.post("/api/sec/answer", json={"symbol": "SYN", "question": "What risks?"})
+                self.assertEqual(response.status_code, status)
+                self.assertNotIn("/private/", response.text)
+                self.assertEqual(response.json()["answer_status"], "failed")
+                self.assertIs(response.json()["generation"]["external_network_executed"], False)
+                expected_calls = 0 if isinstance(error, (OllamaModelMissing, OllamaUnavailable)) else 1
+                self.assertEqual(response.json()["generation"]["llm_calls"], expected_calls)
+                self.assertEqual(client.post("/api/sec/evidence-search", json={"symbol": "SYN", "question": "What risks?"}).status_code, 200)
 
 
 class RetrievalServiceTests(unittest.TestCase):

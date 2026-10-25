@@ -54,7 +54,7 @@
     const sourceLink = secUrl
       ? `<a href="${escapeHtml(secUrl)}" target="_blank" rel="noopener noreferrer">查看 SEC 原始文件 ↗</a>`
       : '<span class="muted">来源链接未通过校验</span>';
-    return `<article class="card evidence-result">
+    return `<article class="card evidence-result" data-chunk-id="${escapeHtml(result.chunk_id || '')}">
       <div class="evidence-result-head"><span class="tag">第 ${escapeHtml(result.rank)} 名</span><strong>${escapeHtml(result.symbol)} · ${escapeHtml(result.company_name || '')}</strong><span class="muted">${escapeHtml(result.form)} · ${escapeHtml(date)}</span></div>
       <p class="evidence-section">章节：${escapeHtml(result.section_title || result.section || '未标注')}</p>
       <p class="evidence-preview">${escapeHtml(result.evidence_excerpt || '')}</p>
@@ -74,6 +74,66 @@
     </article>`;
   }
 
+  function renderLocalAnswer(container, payload, evidenceRoot) {
+    const element = (tag, className, content) => {
+      const node = document.createElement(tag);
+      if (className) node.className = className;
+      if (content !== undefined) node.textContent = String(content);
+      return node;
+    };
+    const citations = new Map((Array.isArray(payload.citations) ? payload.citations : []).map((item) => [item.evidence_id, item]));
+    const card = element('section', 'panel local-answer');
+    card.append(element('h2', '', '本地模型生成的中文回答'));
+    card.append(element('p', 'small muted', `模型：${payload.generation?.model || '未标注'} · 生成耗时：${payload.generation?.total_duration_ms ?? '未提供'} ms · 本地调用：${payload.generation?.local_model_calls ?? '未提供'} · 外部数据请求：无`));
+    const addReferences = (parent, refs) => {
+      (Array.isArray(refs) ? refs : []).forEach((ref) => {
+        const citation = citations.get(ref);
+        if (!citation) return;
+        const button = element('button', 'answer-citation', `[${ref}]`);
+        button.type = 'button';
+        button.setAttribute('aria-label', `跳转到证据 ${ref}`);
+        button.addEventListener('click', () => {
+          const target = Array.from(evidenceRoot.querySelectorAll('.evidence-result'))
+            .find((item) => item.dataset.chunkId === citation.chunk_id);
+          if (!target) return;
+          const group = target.closest('.more-evidence');
+          if (group) group.open = true;
+          target.classList.add('citation-highlight');
+          target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          window.setTimeout(() => target.classList.remove('citation-highlight'), 3000);
+        });
+        parent.append(button);
+      });
+    };
+    const answer = payload.answer || {};
+    if (payload.answer_status === 'evidence_insufficient') {
+      card.append(element('p', 'answer-insufficient', '证据不足：当前 SEC 片段不足以支持可靠回答。'));
+    } else if (payload.answer_status === 'completed') {
+      const direct = element('p', 'answer-direct', answer.direct_answer?.text || '');
+      addReferences(direct, answer.direct_answer?.evidence_ids);
+      card.append(direct);
+      if (Array.isArray(answer.key_points) && answer.key_points.length) {
+        const list = element('ul', 'answer-points');
+        answer.key_points.forEach((point) => {
+          const item = element('li', '', point.text || '');
+          addReferences(item, point.evidence_ids);
+          list.append(item);
+        });
+        card.append(list);
+      }
+    } else {
+      card.append(element('p', 'answer-insufficient', '本地模型没有返回可接受的回答。'));
+    }
+    if (Array.isArray(answer.limitations) && answer.limitations.length) {
+      card.append(element('h3', '', '局限与不确定性'));
+      const list = element('ul', 'answer-limitations');
+      answer.limitations.forEach((item) => list.append(element('li', '', item)));
+      card.append(list);
+    }
+    card.append(element('p', 'small muted', '本地模型生成，仅基于下方 SEC 证据，请自行核验。不构成投资建议。'));
+    container.replaceChildren(card);
+  }
+
   async function secEvidence() {
     render('<div class="panel"><h2>正在读取本地 SEC 语料…</h2><p class="muted">仅访问本机应用，不发起新的 SEC 或模型下载请求。</p></div>', 'sec-evidence', 'SEC 证据检索');
     try {
@@ -86,34 +146,86 @@
       if (!Array.isArray(securities) || !securities.length) throw new Error('没有可检索的 SEC 公司');
       const options = securities.map((security) => `<option value="${escapeHtml(security.symbol)}">${escapeHtml(security.symbol)} · ${escapeHtml(security.company_name)}</option>`).join('');
       const coverage = securities.map((security) => `<div class="coverage-item"><b>${escapeHtml(security.symbol)}</b><span>${escapeHtml(security.company_name)}</span><small>CIK ${escapeHtml(security.CIK || security.cik || '未提供')}</small><small>${escapeHtml(security.document_count)} 份文件 · ${escapeHtml(security.chunk_count)} 个片段 · ${escapeHtml((security.available_forms || []).join(' / '))}</small></div>`).join('');
-      render(`<section class="panel evidence-intro"><span class="tag">真实本地数据 · 仅证据检索</span><h2>在已保存的 SEC 财报中查找证据</h2><p class="muted">选择有语料的公司，输入英文问题。结果来自 BM25 关键词检索、BGE 语义检索和固定 RRF 排序，不是 LLM 回答或投资建议。</p>
-        <div class="evidence-status">语料截止：${escapeHtml(health.corpus_as_of || '未提供')} · ${escapeHtml(health.document_count)} 份文件 · ${escapeHtml(Number(health.chunk_count).toLocaleString('en-US'))} 个片段 · 外部数据请求：无 · LLM 调用：0</div>
-        <form id="sec-search-form" class="evidence-form"><label>公司<select name="symbol" required>${options}</select></label><label>表单<select name="form"><option value="">10-K + 10-Q</option><option value="10-K">仅 10-K</option><option value="10-Q">仅 10-Q</option></select></label><label class="question-field">英文 SEC 财报问题<input name="question" type="text" lang="en" minlength="3" maxlength="1000" required placeholder="What risks could affect demand for the company's products?"></label><button class="primary" type="submit">检索真实证据</button></form>
-        <p class="small muted">只读取本机已保存的语料、索引和模型；不会下载新文件，也不会生成答案。</p></section>
+      render(`<section class="panel evidence-intro"><span class="tag">真实本地数据 · SEC 证据检索</span><h2>在已保存的 SEC 财报中查找证据</h2><p class="muted">选择有语料的公司，输入英文或中文问题。检索结果来自 BM25 关键词检索、BGE 语义检索和固定 RRF 排序；只有主动点击后才尝试本地模型回答。</p>
+        <div class="evidence-status">语料截止：${escapeHtml(health.corpus_as_of || '未提供')} · ${escapeHtml(health.document_count)} 份文件 · ${escapeHtml(Number(health.chunk_count).toLocaleString('en-US'))} 个片段 · 外部数据请求：无 · <span id="local-model-count">本次检索的 LLM 调用：0</span></div>
+        <form id="sec-search-form" class="evidence-form"><label>公司<select name="symbol" required>${options}</select></label><label>表单<select name="form"><option value="">10-K + 10-Q</option><option value="10-K">仅 10-K</option><option value="10-Q">仅 10-Q</option></select></label><label class="question-field">SEC 财报问题（英文或中文）<input name="question" type="text" minlength="3" maxlength="1000" required placeholder="What risks could affect demand for the company's products?"></label><button class="primary" type="submit">检索真实证据</button></form>
+        <p class="small muted">证据检索只读取本机文件；不会下载新 SEC 文件。${health.ollama_enabled ? '可在检索后主动调用本地 Ollama 生成中文回答。' : '本地模型回答未启用。'}</p></section>
         <details class="panel coverage-panel"><summary><span><b>当前真实语料覆盖</b><small>${escapeHtml(securities.length)} 家公司 · ${escapeHtml(health.document_count)} 份文件 · ${escapeHtml(Number(health.chunk_count).toLocaleString('en-US'))} 个片段</small></span><span class="coverage-toggle">查看覆盖公司</span></summary><p class="small muted">仅显示已建索引公司；能搜索证券不等于已有 RAG 语料。</p><div class="coverage-grid">${coverage}</div></details>
         <section id="sec-results" aria-live="polite"></section>`, 'sec-evidence', 'SEC 证据检索');
+      globalNotice.textContent = health.ollama_enabled
+        ? 'SEC 证据检索不会调用模型；点击生成按钮后才会调用本机 Ollama。其他演示页面仍为 Mock Data。'
+        : '当前仅检索已保存的 SEC 文件证据；本地模型回答未启用。其他演示页面仍为 Mock Data。';
+      document.querySelector('#sidebar-model-state').textContent = health.ollama_enabled ? '回答仅在点击后生成' : '本地模型回答未启用';
       document.querySelector('.coverage-panel').addEventListener('toggle', (event) => {
         event.currentTarget.querySelector('.coverage-toggle').textContent = event.currentTarget.open ? '收起覆盖公司' : '查看覆盖公司';
       });
+      let searchGeneration = 0;
       document.querySelector('#sec-search-form').addEventListener('submit', async (event) => {
         event.preventDefault();
+        const requestGeneration = ++searchGeneration;
         const form = event.currentTarget;
         const submit = form.querySelector('button[type="submit"]');
         const results = document.querySelector('#sec-results');
         const fields = new FormData(form);
+        const searchRequest = { symbol: fields.get('symbol'), question: fields.get('question'), form: fields.get('form') || null, as_of: health.corpus_as_of, top_k: 10 };
         submit.disabled = true;
+        document.querySelector('#local-model-count').textContent = '本次检索的 LLM 调用：0';
         results.innerHTML = '<div class="panel"><p>正在从本地索引检索…</p></div>';
         try {
-          const response = await fetch('/api/sec/evidence-search', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ symbol: fields.get('symbol'), question: fields.get('question'), form: fields.get('form') || null, as_of: health.corpus_as_of, top_k: 10 }) });
-          if (!response.ok) throw new Error(response.status === 422 ? '请输入有效的英文问题和筛选条件。' : '检索失败；请检查本地服务和语料状态。');
+          const response = await fetch('/api/sec/evidence-search', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(searchRequest) });
+          if (!response.ok) throw new Error(response.status === 422 ? '请输入有效的问题和筛选条件。' : '检索失败；请检查本地服务和语料状态。');
           const payload = await response.json();
+          if (requestGeneration !== searchGeneration) return;
           const hits = Array.isArray(payload.evidence) ? payload.evidence : [];
           if (payload.answer_status !== 'not_generated') throw new Error('服务未确认仅返回检索证据。');
           const firstHits = hits.slice(0, 3);
           const remainingHits = hits.slice(3);
           results.innerHTML = `<div class="section-title"><h2>检索结果</h2><span class="muted">${escapeHtml(hits.length)} 个证据片段 · 截止 ${escapeHtml(payload.filters?.as_of || health.corpus_as_of || '未提供')}</span></div>
-            <div class="notice">以下是 SEC 原文证据，不是问题答案；当前尚未调用 LLM。排名不代表结论正确，也不构成投资建议。点击 SEC 链接会访问外部 SEC 网站。</div>
-            ${hits.length ? `<div class="evidence-list">${firstHits.map(evidenceCard).join('')}</div>${remainingHits.length ? `<details class="more-evidence"><summary>查看其余 ${escapeHtml(remainingHits.length)} 条证据</summary><div class="evidence-list">${remainingHits.map(evidenceCard).join('')}</div></details>` : ''}` : '<div class="panel"><p>此筛选条件下没有可用证据。请调整问题或表单；不会用模型常识补齐。</p></div>'}`;
+            <div class="notice" id="evidence-boundary-notice">以下是 SEC 原文证据，不是问题答案；当前尚未调用 LLM。排名不代表结论正确，也不构成投资建议。点击 SEC 链接会访问外部 SEC 网站。</div>
+            ${hits.length ? `<div class="evidence-list">${firstHits.map(evidenceCard).join('')}</div>${remainingHits.length ? `<details class="more-evidence"><summary>查看其余 ${escapeHtml(remainingHits.length)} 条证据</summary><div class="evidence-list">${remainingHits.map(evidenceCard).join('')}</div></details>` : ''}` : '<div class="panel"><p>此筛选条件下没有可用证据。请调整问题或表单；不会用模型常识补齐。</p></div>'}
+            ${health.ollama_enabled && hits.length ? '<div class="answer-action"><button class="primary" type="button" id="generate-local-answer">生成中文回答（本地模型）</button><p class="small muted">需主动点击；回答只依据这次检索的 SEC 证据，不是投资建议。</p></div><section id="sec-answer" aria-live="polite"></section>' : ''}`;
+          if (health.ollama_enabled && hits.length) {
+            const button = document.querySelector('#generate-local-answer');
+            const answerContainer = document.querySelector('#sec-answer');
+            button.addEventListener('click', async () => {
+              const answerGeneration = requestGeneration;
+              button.disabled = true;
+              document.querySelector('#evidence-boundary-notice').textContent = '以下仍是 SEC 原文证据，不是模型回答；已尝试本地模型生成。排名不代表结论正确，也不构成投资建议。点击 SEC 链接会访问外部 SEC 网站。';
+              answerContainer.replaceChildren();
+              const progress = document.createElement('p');
+              progress.textContent = '本地模型正在阅读 SEC 证据，首次运行可能需要较长时间……';
+              answerContainer.append(progress);
+              let reportedCalls = null;
+              try {
+                const answerResponse = await fetch('/api/sec/answer', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(searchRequest) });
+                if (!answerResponse.ok) {
+                  const failure = await answerResponse.json().catch(() => ({}));
+                  if (Number.isInteger(failure.generation?.llm_calls)) reportedCalls = failure.generation.llm_calls;
+                  const safeDetails = new Set([
+                    '所选本地模型尚未安装；SEC 证据检索仍可使用。',
+                    'Ollama 本地服务不可用；SEC 证据检索仍可使用。',
+                    '本地模型响应超时；SEC 证据检索仍可使用。',
+                    '本地模型输出未通过证据校验；SEC 证据检索仍可使用。',
+                    '本地模型响应无效；SEC 证据检索仍可使用。',
+                  ]);
+                  throw new Error(safeDetails.has(failure.detail) ? failure.detail : '本地模型暂不可用或回答未通过证据校验；上方 SEC 证据仍可查看。');
+                }
+                const answerPayload = await answerResponse.json();
+                if (answerGeneration !== searchGeneration) return;
+                renderLocalAnswer(answerContainer, answerPayload, results);
+                document.querySelector('#local-model-count').textContent = `本次检索的 LLM 调用：${answerPayload.generation?.llm_calls ?? '未提供'}`;
+              } catch (error) {
+                if (answerGeneration !== searchGeneration) return;
+                const notice = document.createElement('p');
+                notice.className = 'notice';
+                notice.setAttribute('role', 'alert');
+                notice.textContent = error.message;
+                answerContainer.replaceChildren(notice);
+                document.querySelector('#local-model-count').textContent = Number.isInteger(reportedCalls)
+                  ? `本次检索的 LLM 调用：${reportedCalls}` : '本次检索的 LLM 调用：失败后状态未确认';
+              } finally { button.disabled = false; }
+            });
+          }
         } catch (error) {
           results.innerHTML = `<div class="notice" role="alert">${escapeHtml(error.message)}</div>`;
         } finally { submit.disabled = false; }
