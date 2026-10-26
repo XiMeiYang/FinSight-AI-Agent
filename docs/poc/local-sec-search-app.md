@@ -1,6 +1,8 @@
 # 本地 SEC 证据检索应用
 
-2026-10-25 本机状态提示：原 BM25/Dense 索引为 10 份/2,003 片段，当前 corpus 目录已有 100 份/15,925 片段，因此直接使用下方旧路径会因来源指纹不匹配而拒绝启动。本轮 Ollama 复验只在被 Git 忽略的临时目录中复制原 10 份并构建同参数匹配索引，没有修改原数据或索引；不能把临时验证写成 100 份正文正式可检索。
+2026-10-26 当前本机状态：100 份正文、15,925 个片段及新 BM25/Dense 索引已通过严格匹配并由网页检索验证。旧 10 份索引和 2026-10-25 的临时验收目录均不是当前正式启动路径。见[100 份索引验收](sec-100-index-poc.md)。
+
+2026-10-25 历史状态：当时原 BM25/Dense 索引为 10 份/2,003 片段，而 corpus 已有 100 份/15,925 片段；直接混用被来源指纹拒绝。当时仅在 Git 忽略的临时目录完成旧 10 份复验，未改原数据或索引。
 
 后续状态（2026-10-08）：用户已授权在此证据页面增加可选的本机 Ollama 中文回答。证据检索 API 的 `answer_status=not_generated` 保持不变；只有显式启用并由用户点击按钮，新的 `/api/sec/answer` 才调用本地模型。详见[本地 Ollama SEC 问答 PoC](local-ollama-sec-rag.md)。以下原有零 LLM 描述特指默认未启用模式及先前证据检索阶段。
 
@@ -8,7 +10,7 @@
 
 ## 数据与运行边界
 
-- 真实语料仍只保存在被 Git 忽略的 `.local_data`；5 家公司为 AMD、AVGO、INTC、NVDA、QCOM，每家已有 10-K 和 10-Q 各 1 份。余下 90 份候选未下载。
+- 真实语料仍只保存在被 Git 忽略的 `.local_data`；5 家公司为 AMD、AVGO、INTC、NVDA、QCOM，当前本机每家已有 5 份 10-K、15 份 10-Q，共 100 份。早期每家各 1 份的描述仅属于 10 份历史基线。
 - 服务复用 `load_index`、`load_dense_index`、`BGEEmbedder`、`search_loaded_hybrid` 和现有 corpus/index 的身份、来源、哈希、Point-in-Time 校验；没有复制检索算法或改变 RRF 参数。
 - 运行时固定 `BAAI/bge-small-en-v1.5` revision `5c38ec7c405ec4b44b94cc5a9bb96e735b38267a`，并设置 `HF_HUB_OFFLINE=1`、`TRANSFORMERS_OFFLINE=1`、`HF_HUB_DISABLE_TELEMETRY=1`、`local_files_only=True`。服务第一次使用时加载模型、索引和 corpus，此后复用。
 - 应用默认仅监听 `127.0.0.1:8000`；CLI 只接受 loopback host，不提供公网部署。服务没有 SEC、Alpha Vantage、模型下载、Embedding API 或 LLM 请求；用户主动打开来源链接属于浏览器访问 SEC 网站，不是本地检索服务的请求。
@@ -23,8 +25,8 @@
 ```bash
 .local_data/venvs/sec-embedding/bin/python -m pip install -r requirements-app.txt
 .local_data/venvs/sec-embedding/bin/python scripts/run_local_app.py \
-  --bm25-index .local_data/rag/indexes/sec-bm25-2026-09-18 \
-  --dense-index .local_data/rag/indexes/sec-bge-small-en-v1.5-2026-09-18 \
+  --bm25-index .local_data/rag/indexes/sec-bm25-2026-10-26-100 \
+  --dense-index .local_data/rag/indexes/sec-bge-small-en-v1.5-2026-10-26-100 \
   --corpus .local_data/rag/corpus \
   --model-cache .local_data/models/hub \
   --model-revision 5c38ec7c405ec4b44b94cc5a9bb96e735b38267a \
@@ -45,6 +47,6 @@
 
 ## 验证与限制
 
-本轮未运行冻结的 20 条诊断查询评测，没有调 RRF 参数或修改 ground truth。合成 fake-service 单元测试不读取真实 `.local_data`。一次本机 HTTP smoke 显示 `/api/health` 返回 5 家公司、10 文档、2,003 片段；NVDA 风险问题返回 10 条真实索引证据，`network_executed=false`、`llm_calls=0`，来源 URL 为 SEC Archives。另用非诊断集通用问题对 AMD、INTC、AVGO、QCOM 各做 1 条连通性检索，四次均返回 1 个证据片段与零业务联网/LLM 状态。网页交互已在本机浏览器验证能展示公司覆盖和证据卡片。此 smoke 不是检索质量评测或真实用户可用性测试。
+旧 10 份阶段未运行冻结的 20 条诊断查询评测，没有调 RRF 参数或修改 ground truth。合成 fake-service 单元测试不读取真实 `.local_data`。当时一次 HTTP smoke 的 `/api/health` 为 5 家公司、10 文档、2,003 片段；这不是当前覆盖数。2026-10-26 新 100 份索引的 `/api/health` 为 5 家公司、100 文档、15,925 片段；五家公司各一次通用问题检索均返回 10 条 SEC Archives 证据，`network_executed=false`、`llm_calls=0`。浏览器也验证了新覆盖数和证据卡片。以上仅是连通性验收，不是检索质量评测或真实用户可用性测试。
 
 后续已增加可选本机 Ollama 回答与 E 编号的后端引用映射，但仍未实现 Reranker、全面事实一致性评测、生产级 RAG、行情连接、数据库、自选股后台、邮件或公网部署。证据展示阶段没有新增 SEC 文件，也没有重新评测或调整 RRF；当前应由用户实际核对本地模型回答的每条引用。

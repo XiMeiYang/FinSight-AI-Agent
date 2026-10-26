@@ -1,6 +1,6 @@
 # FinSight AI Agent
 
-当前本机状态核对（2026-10-25）：`.local_data/rag/corpus` 有 100 份 SEC 正文，但既有 BM25/Dense 索引仅覆盖最初 10 份、2,003 个片段。完整性校验会拒绝直接混用；这不代表 100 份正文已经建索引或完成问答验收。本轮本地 Ollama 验收采用从现存文件复制的 10 份临时语料及同参数临时索引，原有语料、索引和冻结评测集均未改动。临时文件仍留在 Git 忽略的 `.local_data` 中；不同机器应以实际匹配的语料与索引启动。
+当前本机状态（2026-10-26）：已只读核验 `.local_data/rag/corpus` 的 100 份 SEC 正文、15,925 个片段，并在两个**新目录**建成与其指纹匹配的 BM25/Dense 索引。五家公司检索、默认零模型调用及一次主动点击的 NVDA 本地 Ollama 回答已实测。旧索引仍只覆盖 10 份、2,003 个片段，保留为历史基线；旧 20 条诊断集的指标不适用于新语料。真实数据和索引仅在本机，不随 Git 分发。实际路径、哈希、命令和限制见 [100 份索引验收](docs/poc/sec-100-index-poc.md)。
 
 补充状态（2026-10-08，本地 Ollama PoC）：现有 SEC 证据检索页增加可选的“生成中文回答（本地模型）”。只有用户点击后才使用本机 `qwen3:4b`；后端重新检索、用 JSON Schema 约束输出，并把 E1–E10 引用确定性映射回真实 SEC 证据，网页可点击回到证据卡片。默认不开启时仍是纯检索。模型调用不等于外部 SEC 请求；模型下载与运行分开记录。此功能不是 Reranker、完整事实一致性评测或生产级完整 RAG。启动与边界见[本地 Ollama PoC](docs/poc/local-ollama-sec-rag.md)。
 
@@ -8,11 +8,11 @@
 
 ## 本地 SEC 证据检索网页
 
-本机已有 `.local_data` 离线产物时，可使用隔离 Python 环境安装 `requirements-app.txt`，再按 [本地应用 PoC](docs/poc/local-sec-search-app.md) 的显式路径命令启动。默认地址为 <http://127.0.0.1:8000/>，只绑定本机 loopback；先只读确认 BM25、Dense、corpus、模型缓存的实际路径，不要把它们提交 Git。网页只展示真实有 SEC corpus 的 5 家公司和检索证据；添加 `--enable-ollama --ollama-model qwen3:4b` 才会显示主动生成按钮。旧“演示研究”等页面仍为 Mock Data。此次实现的是最小本地 SEC 检索—回答—引用闭环，不是完整业务系统。
+本机已有 `.local_data` 离线产物时，可使用隔离 Python 环境安装 `requirements-app.txt`，再按 [100 份索引验收](docs/poc/sec-100-index-poc.md) 的**新索引相对路径**命令启动。默认地址为 <http://127.0.0.1:8000/>，只绑定本机 loopback；先只读确认 BM25、Dense、corpus、模型缓存的实际路径，不要把它们提交 Git。网页只展示真实有 SEC corpus 的 5 家公司和检索证据；添加 `--enable-ollama --ollama-model qwen3:4b` 才会显示主动生成按钮。旧“演示研究”等页面仍为 Mock Data。此次实现的是最小本地 SEC 检索—回答—引用闭环，不是完整业务系统。
 
 ## 2026-10-05 SEC 真实正文小批量
 
-已完成五家公司各最新 10-K/10-Q 的 10 份真实 bundle（5 K + 5 Q；19,573,518 raw bytes、399 sections、2,003 chunks），并建立 BM25、384 维 Dense 与运行时 RRF 融合。用户决定暂缓独立真实查询收集；20 条 `provisional_developer_authored` 查询仍仅用于诊断，不是生产准确率。详见 [BM25](docs/poc/sec-bm25-retrieval-poc.md)、[Dense](docs/poc/sec-embedding-retrieval-poc.md) 与 [Hybrid RRF](docs/poc/sec-hybrid-rrf-retrieval-poc.md) PoC。100 份仍只是候选，剩余 90 份未下载。
+当时完成五家公司各最新 10-K/10-Q 的 10 份真实 bundle（5 K + 5 Q；19,573,518 raw bytes、399 sections、2,003 chunks），并建立 BM25、384 维 Dense 与运行时 RRF 融合。用户决定暂缓独立真实查询收集；20 条 `provisional_developer_authored` 查询仍仅用于**旧 10 份语料**的诊断，不是生产准确率。详见 [BM25](docs/poc/sec-bm25-retrieval-poc.md)、[Dense](docs/poc/sec-embedding-retrieval-poc.md) 与 [Hybrid RRF](docs/poc/sec-hybrid-rrf-retrieval-poc.md) PoC。当时剩余 90 份尚未下载；这不是当前状态。
 
 《基于大语言模型与多智能体协作的智能金融分析 AI Agent》
 
@@ -75,7 +75,7 @@ FinSight = Finance + Sight，意为“金融洞察”。定位为个人投资者
 
 ## 建议下一步
 
-请用户亲自打开本地 SEC 网页，比较原文证据与主动生成的中文回答，逐条点击 E 引用核对是否得到证据支持。此前的正式原型可用性测试仍未执行；不要把一次本机问答当作完整事实一致性评测。完整后续顺序见 [开发计划](docs/08-development-plan.md)。
+请用户亲自用新 100 份索引的网页，逐条核对中文回答与 E 引用是否真正得到原文支持，并记录证据不足或错误。此前的正式原型可用性测试仍未执行；不要把一次本机问答当作完整事实一致性评测。完整后续顺序见 [开发计划](docs/08-development-plan.md)。
 
 ## 阅读与协作
 
@@ -95,10 +95,10 @@ ResearchSnapshot 1.1 已增加离线 Excel 导出路径：导出器和 synthetic
 
 ### SEC RAG ingestion PoC
 
-该阶段实现离线 SEC 正文清洗、章节识别和确定性字符分块；后续已完成 10 份真实正文及本地 Dense 检索。LLM 问答与 Agent 仍未实现。
+该阶段实现离线 SEC 正文清洗、章节识别和确定性字符分块；后续已完成 100 份真实正文的本机 BM25/Dense 检索与可选 Ollama 最小回答。多 Agent 仍未实现。
 
 ## SEC 文档解析与覆盖状态（2026-09-26）
 
-已加入离线 SEC HTML 清洗、章节识别、确定性分块、哈希校验、`SecurityCatalog` 和独立 `RAGCoverage` 状态。上一阶段五家公司 submissions metadata refresh 实际执行 4 次 SEC 请求；该 ingestion 阶段正文下载请求为 0，后续另行完成 10 份小批量。多公司候选脚本覆盖 NVDA、AMD、INTC、AVGO、QCOM；当前已实现本地 embedding 矩阵检索及 SEC 证据检索网页，但未引入向量数据库、Reranker、LLM 或 Agent。详见 [SEC RAG 摄取 PoC](docs/poc/sec-rag-ingestion-poc.md)、[多公司 SEC 语料 PoC](docs/poc/sec-corpus-poc.md) 与 [本地应用 PoC](docs/poc/local-sec-search-app.md)。
+已加入离线 SEC HTML 清洗、章节识别、确定性分块、哈希校验、`SecurityCatalog` 和独立 `RAGCoverage` 状态。早期五家公司 submissions metadata refresh 实际执行 4 次 SEC 请求；那一 ingestion 阶段正文下载请求为 0，后续已完成 100 份正文。多公司候选脚本覆盖 NVDA、AMD、INTC、AVGO、QCOM；当前已实现本地 embedding 矩阵检索、SEC 证据检索网页和可选 Ollama 最小回答，但未引入向量数据库、Reranker 或 Agent。详见 [SEC RAG 摄取 PoC](docs/poc/sec-rag-ingestion-poc.md)、[多公司 SEC 语料 PoC](docs/poc/sec-corpus-poc.md) 与 [本地应用 PoC](docs/poc/local-sec-search-app.md)。
 
-正文下载器已加入离线 dry-run、稳定小批量选择、预算预检、五类产物批次提交与失败回滚。100 份是已确认候选，已完成其中 10 份正文 bundle；已实现 BM25、Dense 与固定 RRF 诊断评测，但 Reranker、回答与引用核验仍未实现，因此不称为完整 RAG。
+正文下载器已加入离线 dry-run、稳定小批量选择、预算预检、五类产物批次提交与失败回滚。当前本机已保存 100 份正文并完成匹配索引；旧 10 份语料上的固定 RRF 诊断指标仍是历史基线。已有可选回答及确定性引用映射，但 Reranker、全面事实一致性评测仍未实现，因此不称为生产级完整 RAG。

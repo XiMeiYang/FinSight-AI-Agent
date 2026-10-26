@@ -1,5 +1,9 @@
 # 本地 Ollama SEC 问答 PoC
 
+## 2026-10-26 当前本机索引
+
+100 份 SEC 正文和 15,925 个片段已在新目录建立匹配的 BM25/Dense 索引，严格加载与五家公司网页证据检索通过；默认不开 Ollama 时模型调用为 0。为核对原子重建前后均可用，本轮分别主动点击一次 NVDA 回答，合计 2 次本地模型调用，均返回中文 `completed`；最终索引版本报告生成耗时 16,773 ms、本次调用 1 次、SEC/Alpha Vantage 请求 0，E7 回跳本次 SEC Archives 证据。此为连通性和引用映射验证，尚未完成人工逐句事实一致性评测。新目录和可复制命令见[100 份索引验收](sec-100-index-poc.md)；下文 2026-10-25 的临时 10 份目录以及更早“剩余 90 份”均为历史记录。
+
 ## 2026-10-25 复验环境说明
 
 本机当前 `.local_data/rag/corpus` 已有 100 份正文、15,925 个片段，旧 BM25/Dense 索引仍对应 10 份正文、2,003 个片段。读取服务按语料 SHA-256 拒绝直接混用，返回 `offline retrieval is not ready`，这是预期的完整性保护；不能绕过指纹校验或把这次启动记成成功问答。为复验旧检索与问答功能，验收仅从现存本地文件复制旧索引清单中的 10 份到被 Git 忽略的临时目录，并用相同 BM25、Dense、模型版本与 RRF 参数在该目录生成临时匹配索引。正式语料、既有索引和冻结评测集均未修改，未向 SEC 或 Alpha Vantage 发起请求。当前真实正文已达到 100 份，因此下文“剩余 90 份”是 2026-10-08 的历史记录，不是当前本地状态。
@@ -16,8 +20,8 @@
 
 ```bash
 PYTHONPATH=src .local_data/venvs/sec-embedding/bin/python scripts/run_local_app.py \
-  --bm25-index .local_data/rag/indexes/sec-bm25-2026-09-18 \
-  --dense-index .local_data/rag/indexes/sec-bge-small-en-v1.5-2026-09-18 \
+  --bm25-index .local_data/rag/indexes/sec-bm25-2026-10-26-100 \
+  --dense-index .local_data/rag/indexes/sec-bge-small-en-v1.5-2026-10-26-100 \
   --corpus .local_data/rag/corpus \
   --model-cache .local_data/models/hub \
   --model-revision 5c38ec7c405ec4b44b94cc5a9bb96e735b38267a \
@@ -42,6 +46,6 @@ PYTHONPATH=src .local_data/venvs/sec-embedding/bin/python scripts/run_local_app.
 
 2026-10-25 当前版本复验：隔离应用 Python 加载已有 bundled `openpyxl` 后执行 `python -m unittest discover -s tests -p 'test_*.py' -q`，**231 项通过，0 skip**；独立只读验收官亲自复跑同一完整测试。系统 `python3 -m unittest discover -s tests -p 'test_*.py' -q` 为 221 项、1 个 import error、17 skip，错误是缺少 `openpyxl`，不能写成通过。新增回归测试覆盖模型在局限字段写入买卖建议、收益保证和无引用英文事实的情况；后端改用固定中文局限，危险原文不会展示。`compileall`、`node --check` 和 `git diff --check` 通过。
 
-仍未实现 Reranker、完整事实一致性评测、多 Agent、数据库、公网部署、剩余 90 份 SEC 文件或生产级投资研究。文档中的“本地问答”只指用户主动触发、结构化校验与确定性引用映射的最小 PoC。
+仍未实现 Reranker、完整事实一致性评测、多 Agent、数据库、公网部署或生产级投资研究。文档中的“本地问答”只指用户主动触发、结构化校验与确定性引用映射的最小 PoC。
 
 接口依据（2026-10-08 核对）：[Ollama Chat API](https://docs.ollama.com/api/chat)、[模型列表 API](https://docs.ollama.com/api/tags)、[结构化输出](https://docs.ollama.com/capabilities/structured-outputs)。
