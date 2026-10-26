@@ -1,0 +1,80 @@
+# NVDA 单份回答证据初审
+
+## 状态与样本
+
+样本于 2026-10-26 采集，初审于 2026-10-27 完成，状态为 **Codex 初审、待用户复核**。本记录不是人工标注、系统准确率或检索召回率评测，也不复用旧 20 条诊断集指标。原始回答保持不变；发现问题不触发重生成或产品修改。
+
+样本 ID：`nvda-answer-2026-10-26-001`。代码基线为 `45cd3cd82b001e5ec2e3a95b05f0db2410558ca7`，本地及 fetch 后的远端基线一致。未找到能完整对应上轮回答、证据、引用及索引身份的持久化响应，因此本轮在现有网页主动生成 **1 次新样本**，不是历史 16,773 ms 回答。
+
+请求在 `2026-10-26T14:23:24.470616+00:00` 提交；返回 HTTP 200、`completed`。本机 `qwen3:4b` 报告生成耗时 **12,587 ms**，记录包装的生成方法耗时 **12,632.014 ms**（包含本地调用与校验，非整个页面端到端延迟）。实际模型 digest：`359d7dd4bcdab3d86b87d73ac27966f4dbb9f5efdfcc75d34a8764a09474fae7`。请求、完整模型响应、最终网页响应及问题仅保存在本地，不进入 Git。
+
+## 索引与实际入模范围
+
+现有严格加载器和 `validate_compatible_indexes` 验证通过：5 家公司、100 份 filing、15,925 个片段，语料截止时间 `2026-09-18T23:59:59Z`。未重建或修改索引。
+
+| 本机正式索引 | manifest SHA-256 |
+|---|---|
+| `.local_data/rag/indexes/sec-bm25-2026-10-26-100` | `611bd5a7fadb3ffa42031bab276c48320da388fb5467bda7d4a3427f8413cc71` |
+| `.local_data/rag/indexes/sec-bge-small-en-v1.5-2026-10-26-100` | `cd71d6d2d925440dbc478d0c18fdb0cfaff1a35f53d9a44e71d1beb2dfaedde5` |
+
+回答接口重新检索后，按本次排名赋予 E1–E10；没有使用独立搜索请求的编号代替它。记录包装只保存现有方法的实际参数和返回值，并限制最多一次生成，不修改提示词、证据、参数或前端。
+
+实际模型输入为 10 个原文窗口，每条展示窗口上限 400 字符；整体证据预算 12,000 字符。本次紧凑证据 JSON 为 5,572 字符，实际 user message 为 5,834 字符。模型没有收到完整 chunk 或完整财报。`model-request.json` 保存实际消息及 JSON Schema；明确发送 `stream=false`、`think=false`。temperature、seed、上下文长度等未在请求中显式设置，运行时有效值**无法确认**，不将默认值当作实测。
+
+## 方法与初审发现
+
+将直接回答及全部要点拆为 11 条可独立核验的主张，重复出现的主张仍逐次记录。逐条先查原引用对应的实际入模英文窗口，再核对已保存 SEC 正文和上下文；记录 accession、chunk、章节、SEC Archives URL、英文短摘录、具体本地定位、判定和建议。**已核对本地保存正文，未在线复验。**
+
+初审按原引用集合判断是否有依据，同时逐个检查该集合中每个 E。复合句共用引用造成的粒度不足，与单独要点中不相关的引用分开统计；全文其他位置存在支持，不抵消原入模窗口的缺口。系统固定替换的局限提示另作非金融声明说明，不混入金融主张分母。
+
+| 入模支持判定 | 条数 / 11 条 |
+|---|---:|
+| 充分支持 | 8 |
+| 部分支持 | 3 |
+| 无支持 | 0 |
+| 与证据矛盾 | 0 |
+| 无法判断 | 0 |
+
+主要发现：
+
+- 单独的第三方制造/组装要点附带 E8、E9，但这两个实际入模窗口不支持该点；E2、E5 直接支持。E8 的完整本地正文另有相关句子，但它未进入该 E 的入模窗口，不能替原引用补证。
+- 两处将具体供给可用性扩大为整体供应链的概括，仅得到部分支持。组件可用性与产能可用性也需区分。
+- 一处“主要性”概括没有重要性排序依据；这是需要收窄的措辞，不是反证。
+- 制造提前期的翻译宜更精确；跨年份披露宜注明时间，不能据此保证截止日现状。本回答未明确把某日风险写成已发生的现状，因此未认定为已证实的时间错误。
+
+问题标签按主张计数且不互斥：明确引用错配 1、范围扩大 2、主要性缺证据 1、组级引用粒度不足 5、术语精度 2、建议增加日期 3、入模范围提醒 2、重复主张提醒 1。单项标签之和不等于主张数。以上数字由本地 `audit_summary.py` 从 `claims.json` 确定性计算；没有把代理判断变成系统质量指标。
+
+## 网页引用验证
+
+本次回答实际出现 E1、E2、E5、E6、E7、E8、E9、E10，共 8 个不同引用。已逐个点击，8/8 正确定位到与回答响应一致的 chunk、accession 和 SEC Archives URL；后续证据分组可以展开。只点内部引用按钮，没有在线打开 SEC 原文链接。跳转正确与内容支持结论分别记录，不能互相替代。
+
+## 本地交付与复核方法
+
+本地目录：`.local_data/reviews/nvda-answer-2026-10-26-001/`（Git 忽略，不随仓库分发）。
+
+- `claims.md` / `claims.json`：完整逐条对照表与结构化记录；人工状态待用户复核。
+- `suggested-revision.md`：保守修订建议，不覆盖原回答，也未进入产品。
+- `http-request.json`、`http-response.json`、`answer-response.json`：冻结的本次请求和最终响应。
+- `model-request.json`、`model-response.json`、`model-tags.json`：实际入模窗口、原始输出、模型身份；`answer-retrieval.json`、`evidence-mapping.json` 保存本次检索与 E 对应关系。
+- `identity.json`、`validated-health.json`、`capture-summary.json`、`run.json`：基线、索引、实际范围及运行信息。
+- `browser-click-observations.json`、`browser-validation.json`：实际点击观察及响应对应检查。
+- `statistics.json`、`audit_summary.py`：带分母的统计和可重复检查。运行 `python3 .local_data/reviews/nvda-answer-2026-10-26-001/audit_summary.py` 只复核已保存记录，不生成回答。
+
+完整文件哈希见本地 `artifact-hashes.json`（不含其自身，清单自身哈希见下表）。复核应读取冻结记录，不再次点击生成来尝试复现措辞；模型输出不保证逐字可重复。
+
+| 本地关键文件 | SHA-256 |
+|---|---|
+| `answer-response.json` | `8894d466dbe7fbfdce4066bda30ba1a304cb18d0f8bd6838490c69bd3b451966` |
+| `model-request.json` | `d0c0e480734df0fda035566c16bbd8f24981473b82dd2248dafd640b6dc356f3` |
+| `evidence-mapping.json` | `6e20a66afa256e0ac1d841613cec6b13a77ddad4fa81c4bcef60daebd38c52dd` |
+| `claims.json` | `ffae53d0f136d1ad0407d157eafb82e82652145a7a34b2d0e82e1738ce74fcdf` |
+| `claims.md` | `077d1efe5f0fbcb1a841e0ebca7e2f7ced5992273241a322275dc414f04cf5f5` |
+| `statistics.json` | `1c5dd4a0b0b9ec058c2bf020f7b7375284059c50b9d54e132e8f6f04f57827d0` |
+| `browser-validation.json` | `5f9097c9da09815568555475cca76982fab66c042a6a98f87e202be618a11827` |
+| `artifact-hashes.json` | `d8ac9896a1afc5b454dbfcf01ce014a4f98056bfd3ba008fe7b5925f74c4b505` |
+
+## 检查与局限
+
+本轮仅本地模型生成 1 次，SEC、Alpha Vantage、模型下载请求均为 0（Git 同步另计）。未改产品代码、参数、模型、索引或冻结诊断集；未开发自动 Evidence Auditor。真实文本、用户问题、回答和运行明细均只在 `.local_data`。
+
+按文档变更范围检查样本对应、定位、统计、Markdown 链接、敏感信息和 Git diff；没有为凑数量重跑完整业务测试，历史 231 项通过不属于本轮结果。独立 Sol 的只读验收仍是代理审阅，不能代替用户人工确认。当前只完成一份样本初审，未完成全面事实一致性评测、生产级 RAG、多 Agent、数据库、邮件、定时监控或公网部署。下一步只请用户复核本地逐条表，确认或修正判定。
