@@ -94,6 +94,14 @@ class EvidenceAuditor:
         user = json.dumps({"pairs": pairs}, ensure_ascii=False, separators=(",", ":"))
         return [{"role": "system", "content": system}, {"role": "user", "content": user}], audit_json_schema()
 
+    def prepare_isolated_requests(self, payload: dict[str, Any]) -> list[tuple[str, list[dict[str, str]], dict[str, Any]]]:
+        """Prepare one independent request per pair, with no shared history."""
+        pairs = _validate_pairs(payload)
+        return [
+            (pair["pair_id"], *self.prepare_request({"schema_version": "1.0", "pairs": [pair]}))
+            for pair in pairs
+        ]
+
     @staticmethod
     def validate_result(raw: Any, pairs: list[dict[str, Any]]) -> dict[str, Any]:
         if isinstance(raw, str):
@@ -142,19 +150,23 @@ class EvidenceAuditor:
         if self.client is None:
             raise EvidenceAuditRunError("model client is not configured")
         pairs = _validate_pairs(payload)
+        if len(pairs) != 1:
+            raise EvidenceAuditError("run_model requires exactly one pair")
         messages, schema = self.prepare_request(payload)
         before = getattr(self.client, "chat_request_count", None)
+        def record_count() -> None:
+            after = getattr(self.client, "chat_request_count", None)
+            if isinstance(before, int) and isinstance(after, int):
+                self.model_call_count += max(0, after - before)
+
         try:
             response = self.client.generate(messages, schema)
         except OllamaError as exc:
-            after = getattr(self.client, "chat_request_count", None)
-            self.model_call_count = max(0, after - before) if isinstance(before, int) and isinstance(after, int) else 0
+            record_count()
             raise EvidenceAuditRunError("evidence auditor model request failed") from exc
         except Exception as exc:
-            after = getattr(self.client, "chat_request_count", None)
-            self.model_call_count = max(0, after - before) if isinstance(before, int) and isinstance(after, int) else 0
+            record_count()
             raise EvidenceAuditRunError("evidence auditor model request failed") from exc
-        after = getattr(self.client, "chat_request_count", None)
-        self.model_call_count = max(0, after - before) if isinstance(before, int) and isinstance(after, int) else 1
+        record_count()
         content = response.get("content") if isinstance(response, dict) else response
         return self.validate_result(content, pairs)
