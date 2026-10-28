@@ -2,7 +2,7 @@
 """Prepare or explicitly run the offline Evidence Auditor PoC."""
 from __future__ import annotations
 import argparse, json, pathlib, time
-from finsight_app.evidence_auditor import EvidenceAuditor, EvidenceAuditError, EvidenceAuditRunError
+from finsight_app.evidence_auditor import EvidenceAuditor, EvidenceAuditError, EvidenceAuditRunError, system_prompt_sha256
 from finsight_app.ollama_client import OllamaClient, OllamaError
 
 class RecordingOllamaClient(OllamaClient):
@@ -31,6 +31,7 @@ def main() -> int:
     parser.add_argument("--output-dir", type=pathlib.Path)
     parser.add_argument("--model", default="qwen3:4b")
     parser.add_argument("--expected-digest")
+    parser.add_argument("--prompt-version", choices=("baseline", "candidate-v1"), default="baseline")
     args = parser.parse_args()
     if args.run_model and args.output_dir is None:
         print(json.dumps({"status":"failed","error":"--output-dir is required with --run-model"}, ensure_ascii=False))
@@ -47,15 +48,18 @@ def main() -> int:
     try:
         payload = json.loads(args.input.read_text(encoding="utf-8"))
         client = RecordingOllamaClient(model=args.model) if args.run_model else None
-        auditor = EvidenceAuditor(client)
+        auditor = EvidenceAuditor(client, prompt_version=args.prompt_version)
         isolated = auditor.prepare_isolated_requests(payload)
+        prompt_hash = system_prompt_sha256(args.prompt_version)
         result = {"mode": "model" if args.run_model else "prepare", "external_network_executed": False,
+                  "prompt_version": args.prompt_version, "system_prompt_sha256": prompt_hash,
                   "model_calls": 0, "pair_count": len(isolated), "items": [], "not_executed": []}
         for index, (pair_id, messages, schema) in enumerate(isolated, 1):
             if args.output_dir:
                 item_dir = args.output_dir / "items" / f"{index:02d}"
                 item_dir.mkdir(parents=True, exist_ok=True)
                 (item_dir / "request.json").write_text(json.dumps({"model": args.model, "pair_id": pair_id,
+                    "prompt_version": args.prompt_version, "system_prompt_sha256": prompt_hash,
                     "messages": messages, "stream": False, "think": False, "format": schema},
                     ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         if not args.run_model:
@@ -74,7 +78,8 @@ def main() -> int:
                 info = None
             if info is None:
                 for index, (pair_id, _messages, _schema) in enumerate(isolated, 1):
-                    item = {"pair_id": pair_id, "status": "not_executed", "model_calls": 0,
+                    item = {"pair_id": pair_id, "status": "not_executed", "prompt_version": args.prompt_version,
+                            "system_prompt_sha256": prompt_hash, "model_calls": 0,
                             "request_count": 0, "response_count": 0, "elapsed_ms": 0,
                             "model_digest": None, "response_duration_ms": None,
                             "error": "global model condition failed"}
@@ -95,7 +100,8 @@ def main() -> int:
                 result["not_executed"] = [x[0] for x in isolated]
                 result["status_counts"] = {"accepted": 0, "validation_failed": 0, "run_failed": 0, "not_executed": len(isolated)}
                 for index, (pair_id, _messages, _schema) in enumerate(isolated, 1):
-                    item = {"pair_id": pair_id, "status": "not_executed", "model_calls": 0,
+                    item = {"pair_id": pair_id, "status": "not_executed", "prompt_version": args.prompt_version,
+                            "system_prompt_sha256": prompt_hash, "model_calls": 0,
                             "request_count": 0, "response_count": 0, "elapsed_ms": 0,
                             "model_digest": info["digest"], "response_duration_ms": None,
                             "error": "global model condition failed"}
@@ -113,7 +119,8 @@ def main() -> int:
                 before_requests = len(client.requests)
                 before_responses = len(client.responses)
                 previous_generation = client.last_generation
-                item = {"pair_id": pair_id, "status": "accepted"}
+                item = {"pair_id": pair_id, "status": "accepted", "prompt_version": args.prompt_version,
+                        "system_prompt_sha256": prompt_hash}
                 try:
                     item["audit"] = auditor.run_model({"schema_version": "1.0", "pairs": [pair_by_id[pair_id]]})
                     if args.expected_digest and client.last_generation is not previous_generation and client.last_generation and client.last_generation.get("model_digest") != args.expected_digest:
@@ -142,7 +149,8 @@ def main() -> int:
                 if item["status"] == "run_failed" and "digest" in str(item.get("error", "")):
                     result["not_executed"] = [x[0] for x in isolated[index:]]
                     for remaining_index, (remaining_id, _rm, _rs) in enumerate(isolated[index:], index + 1):
-                        remaining = {"pair_id": remaining_id, "status": "not_executed", "model_calls": 0,
+                        remaining = {"pair_id": remaining_id, "status": "not_executed", "prompt_version": args.prompt_version,
+                                     "system_prompt_sha256": prompt_hash, "model_calls": 0,
                                      "request_count": 0, "response_count": 0, "elapsed_ms": 0,
                                      "model_digest": None, "response_duration_ms": None,
                                      "error": "global model condition failed"}

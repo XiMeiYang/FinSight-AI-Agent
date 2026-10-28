@@ -1,5 +1,9 @@
 # 项目记忆
 
+## 2026-10-28：Evidence Auditor 提示词一次配对对照
+
+在默认 `baseline` 保持原文和已提交 `candidate-v1` 保持原文的条件下，使用本机 AMD、AVGO、INTC、QCOM 的 8 个新 SEC 窗口构造 16 个关联诊断项；参考标签与输入在模型运行前封存并由独立只读代理预审。每项两个版本各一次，本机 `qwen3:4b` `/api/chat` 共 32 次，无重试；无 SEC、行情或模型下载请求。baseline 16/16 接受，候选 14/16 接受、2 项因非原文摘录被拒。两版本对 8 条有直接支持主张均为 7 条接受且判支持；对 8 条非支持主张，baseline 错放 3 条、候选错放 4 条。候选修正部分金额和数值误判，但新增时间、否定及数值误放，且一些理由与最终判定矛盾。**默认仍为 baseline，candidate-v1 暂停启用**；这只是代理预标注的单次构造诊断，人工确认仍待用户复核，不是产品准确率或一般效果证明。方法及汇总见[配对对照](docs/poc/evidence-auditor-paired-prompt-comparison.md)，完整窗口与响应只在 Git 忽略目录 `.local_data/reviews/sec-auditor-prompt-paired-2026-10-28-001/`。本轮不接入网页或自动改写回答。
+
 ## 2026-10-28：跨公司审计失败归因与未启用提示词候选
 
 本轮模型调用预算为 0，只复核前次冻结跨公司诊断中的 D002、D003、D004、D008、D012 及同窗口配对项。Codex 独立只读代理指出：D002 的窗口仅给出较早日期数值，不能支持另一日期，但也未明确否定另一日期可能出现相同数值；因此建议将旧参考标签 `contradicted` **另案更正为** `unsupported`。原 `reference.json`、16 项原始响应、对照和统计全部保留。D003 数量相反、D012 入模窗口中的金额单位相反、D008 对象未提及、D004 非连续伪摘录被确定性拒绝，均按各自层级解释；不把原因推测当作模型内部事实。完整真实窗口和逐项复核在 Git 忽略目录 `.local_data/reviews/sec-evidence-auditor-failure-attribution-2026-10-28-001/`。公开方法见[五例归因](docs/poc/evidence-auditor-failure-attribution.md)，通用[候选审计提示词](docs/poc/evidence-auditor-prompt-candidate-v1.md)仅存文档，未启用、未实测、未接入网页。原 16 项是已见开发样本，不能作为候选的未见测试集；人工确认继续待用户复核。

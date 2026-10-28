@@ -8,10 +8,11 @@ import os
 import importlib
 import contextlib
 import io
+import re
 from unittest import mock
 from unittest.mock import Mock
 
-from finsight_app.evidence_auditor import EvidenceAuditor, EvidenceAuditError, EvidenceAuditRunError
+from finsight_app.evidence_auditor import EvidenceAuditor, EvidenceAuditError, EvidenceAuditRunError, system_prompt_sha256
 
 def payload():
     return {"schema_version":"1.0","data_mode":"synthetic","pairs":[
@@ -24,6 +25,25 @@ class AuditorTests(unittest.TestCase):
         a=EvidenceAuditor(); req,s=a.prepare_request(payload()); self.assertEqual(len(req),2)
         self.assertIn("claim_text 和 evidence_text", req[0]["content"])
         out=a.validate_result(self.good(),payload()["pairs"]); self.assertEqual(out["results"][0]["source"]["accession_number"],"synthetic-a")
+
+    def test_prompt_versions_are_explicit_and_hashed(self):
+        baseline = EvidenceAuditor().prepare_request(payload())[0][0]["content"]
+        candidate = EvidenceAuditor(prompt_version="candidate-v1").prepare_request(payload())[0][0]["content"]
+        self.assertNotEqual(baseline, candidate)
+        self.assertEqual(system_prompt_sha256("baseline"), system_prompt_sha256("baseline"))
+        self.assertNotEqual(system_prompt_sha256("baseline"), system_prompt_sha256("candidate-v1"))
+        with self.assertRaises(EvidenceAuditError): EvidenceAuditor(prompt_version="nope")
+
+    def test_candidate_prompt_matches_document_blockquote_without_markers(self):
+        doc = Path("docs/poc/evidence-auditor-prompt-candidate-v1.md").read_text(encoding="utf-8")
+        block = doc.split("## 候选系统提示词全文", 1)[1].split("## 与当前默认提示词的差异", 1)[0]
+        expected = "\n".join(
+            re.sub(r"\*\*|`", "", line[2:] if line.startswith("> ") else "")
+            for line in block.splitlines()
+            if line.startswith(">")
+        ).strip()
+        from finsight_app.evidence_auditor import CANDIDATE_SYSTEM_PROMPT
+        self.assertEqual(CANDIDATE_SYSTEM_PROMPT, expected)
     def test_isolated_requests_contain_only_their_target_pair(self):
         requests = EvidenceAuditor().prepare_isolated_requests(payload())
         self.assertEqual([x[0] for x in requests], ["P1", "P2"])
@@ -248,6 +268,42 @@ class AuditorTests(unittest.TestCase):
             self.assertTrue((out / "items" / "02" / "request.json").exists())
             self.assertTrue((out / "raw-responses.json").exists())
             self.assertTrue((out / "result.json").exists())
+
+    def test_cli_records_prompt_version_and_hash_without_call(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp); inp = root / "pairs.json"; out = root / "out"
+            inp.write_text(json.dumps(payload()), encoding="utf-8")
+            env = dict(os.environ); env["PYTHONPATH"] = "src"
+            proc = subprocess.run([sys.executable, "scripts/run_evidence_auditor.py", str(inp), "--prompt-version", "candidate-v1", "--output-dir", str(out)], capture_output=True, text=True, check=False, env=env)
+            self.assertEqual(proc.returncode, 0)
+            summary = json.loads((out / "result.json").read_text())
+            request = json.loads((out / "items" / "01" / "request.json").read_text())
+            self.assertEqual(summary["prompt_version"], "candidate-v1")
+            self.assertEqual(summary["system_prompt_sha256"], request["system_prompt_sha256"])
+            self.assertEqual(summary["model_calls"], 0)
+
+    def test_cli_prompt_versions_use_separate_artifacts_and_reject_nonempty_dir(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp); inp = root / "pairs.json"; baseline_dir = root / "baseline"; candidate_dir = root / "candidate"
+            inp.write_text(json.dumps(payload()), encoding="utf-8")
+            env = dict(os.environ); env["PYTHONPATH"] = "src"
+            for version, out in (("baseline", baseline_dir), ("candidate-v1", candidate_dir)):
+                proc = subprocess.run([sys.executable, "scripts/run_evidence_auditor.py", str(inp), "--prompt-version", version, "--output-dir", str(out)], capture_output=True, text=True, check=False, env=env)
+                self.assertEqual(proc.returncode, 0)
+            base = json.loads((baseline_dir / "result.json").read_text())
+            cand = json.loads((candidate_dir / "result.json").read_text())
+            base_req = json.loads((baseline_dir / "items" / "01" / "request.json").read_text())
+            cand_req = json.loads((candidate_dir / "items" / "01" / "request.json").read_text())
+            self.assertEqual(base["prompt_version"], "baseline")
+            self.assertEqual(cand["prompt_version"], "candidate-v1")
+            self.assertNotEqual(base["system_prompt_sha256"], cand["system_prompt_sha256"])
+            self.assertEqual(base_req["format"], cand_req["format"])
+            self.assertEqual(base_req["messages"][1], cand_req["messages"][1])
+            nonempty = root / "nonempty"
+            nonempty.mkdir(); (nonempty / "keep.json").write_text("{}", encoding="utf-8")
+            rejected = subprocess.run([sys.executable, "scripts/run_evidence_auditor.py", str(inp), "--output-dir", str(nonempty)], capture_output=True, text=True, check=False, env=env)
+            self.assertEqual(rejected.returncode, 2)
+            self.assertEqual((nonempty / "keep.json").read_text(), "{}")
     def test_cross_window_quote_rejected(self):
         value=self.good(); value["results"][0]["evidence_quote"]="uncertain supply and capacity availability."
         with self.assertRaises(EvidenceAuditError): EvidenceAuditor.validate_result(value,payload()["pairs"])
