@@ -194,6 +194,41 @@ class AnswerServiceTests(unittest.TestCase):
         self.assertEqual(result["answer"]["direct_answer"]["evidence_ids"], [])
         self.assertEqual(result["answer"]["key_points"], [])
 
+    def test_evidence_insufficient_key_points_require_chinese_text_and_valid_refs(self):
+        cases = [
+            ({"text": "", "evidence_ids": ["E1"]}, "empty text"),
+            ({"text": "   ", "evidence_ids": ["E1"]}, "whitespace-only text"),
+            ({"text": "English only", "evidence_ids": ["E1"]}, "english text"),
+            ({"text": 123, "evidence_ids": ["E1"]}, "non-string text"),
+            ({"text": "存在风险。", "evidence_ids": []}, "no reference"),
+            ({"text": "存在风险。", "evidence_ids": ["E9"]}, "unknown reference"),
+            ({"text": "请见 https://evil.invalid。", "evidence_ids": ["E1"]}, "URL text"),
+            ({"text": "风险见 [E9]。", "evidence_ids": ["E1"]}, "fake inline ID"),
+        ]
+        for point, label in cases:
+            with self.subTest(label=label):
+                client = FakeClient(answer("evidence_insufficient", extra={
+                    "key_points": [point],
+                }))
+                with self.assertRaises(AnswerServiceError):
+                    AnswerService(client).generate("问题", payload())
+
+        client = FakeClient(answer("evidence_insufficient", extra={
+            "key_points": [{"text": "证据显示存在需求风险。", "evidence_ids": ["E1"]}],
+        }))
+        result = AnswerService(client).generate("问题", payload())
+        self.assertEqual(result["answer"]["key_points"][0]["evidence_ids"], ["E1"])
+
+    def test_evidence_insufficient_prompt_and_schema_require_referenced_key_points(self):
+        client = FakeClient(answer("evidence_insufficient"))
+        AnswerService(client).generate("问题", payload())
+        schema = client.calls[0][1]
+        self.assertEqual(schema["properties"]["key_points"]["items"]["properties"]["text"]["type"], "string")
+        self.assertEqual(schema["properties"]["key_points"]["items"]["properties"]["evidence_ids"]["minItems"], 1)
+        prompt = client.calls[0][0][0]["content"]
+        self.assertIn("每个 key_points 要点都必须是非空中文", prompt)
+        self.assertIn("至少一个本次提供的有效证据 ID", prompt)
+
     def test_model_failure_is_safe_and_not_claimed_completed(self):
         class Broken:
             def generate(self, *args): raise RuntimeError("private path /tmp/secret")

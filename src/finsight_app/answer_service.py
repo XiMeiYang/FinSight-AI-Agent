@@ -212,11 +212,8 @@ class AnswerService:
             if not isinstance(point.get("text"), str):
                 raise AnswerServiceError("key point text must be a string")
             point["evidence_ids"] = clean_refs(point["evidence_ids"])
-            if status == "completed":
-                point["text"] = _require_chinese_text(point.get("text"), "key point")
-            else:
-                point["text"] = _safe_model_text(point.get("text"), set(point["evidence_ids"]))
-            if status == "completed" and not point["evidence_ids"]:
+            point["text"] = _require_chinese_text(point.get("text"), "key point")
+            if not point["evidence_ids"]:
                 raise AnswerServiceError("key point lacks evidence")
         for limitation in parsed["limitations"]:
             if not isinstance(limitation, str) or len(limitation) > 500:
@@ -243,7 +240,8 @@ class AnswerService:
                   "当 answer_status=completed 时，direct_answer.text 必须写至少一句非空中文直接回答，"
                   "且 direct_answer.evidence_ids 至少包含一个有效 ID；不要只填写 key_points。"
                   "无法由证据回答时必须使用 evidence_insufficient；direct_answer.text 必须是非空简短中文说明，"
-                  "direct_answer.evidence_ids 和 key_points 可以为空。"
+                  "direct_answer.evidence_ids 可以为空；key_points 可以为空，但若填写任何要点，"
+                  "每个 key_points 要点都必须是非空中文，并在 evidence_ids 中填写至少一个本次提供的有效证据 ID。"
                   "不要输出 URL、分数、元数据、思考过程或置信度百分比。")
         user = json.dumps({"question": _text(question), "evidence": packed}, ensure_ascii=False)
         callback = request_callback or self.request_callback
