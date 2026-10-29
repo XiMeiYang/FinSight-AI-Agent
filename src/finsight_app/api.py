@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Optional
+import inspect
+import hashlib
 import unicodedata
 
 try:
@@ -27,6 +29,7 @@ from finsight_rag.ingestion import parse_time
 from .retrieval_service import RetrievalService
 from .answer_service import AnswerGenerationError, AnswerValidationError
 from .ollama_client import OllamaError, OllamaModelMissing, OllamaTimeout, OllamaUnavailable
+from .research_records import ResearchRecordStore, ResearchRecordNotFound, ResearchRecordCorrupt
 
 
 class EvidenceRequest(BaseModel):
@@ -66,7 +69,7 @@ class AnswerRequest(EvidenceRequest):
             return value
 
 
-def create_app(service: RetrievalService, static_dir=None, answer_service=None):
+def create_app(service: RetrievalService, static_dir=None, answer_service=None, research_record_store=None):
     if FastAPI is None: raise RuntimeError("FastAPI and Uvicorn are required; install requirements-app.txt")
     app = FastAPI(title="FinSight SEC Evidence", version="0.1.0")
 
@@ -123,6 +126,19 @@ def create_app(service: RetrievalService, static_dir=None, answer_service=None):
         except (ValueError, TypeError) as exc: raise HTTPException(status_code=400, detail="invalid offline retrieval request") from exc
         except Exception as exc: raise HTTPException(status_code=503, detail="offline retrieval failed") from exc
 
+    @app.get("/api/research-records")
+    def research_records(symbol: Optional[str] = Query(default=None, max_length=10), limit: int = Query(default=20, ge=1, le=100), offset: int = Query(default=0, ge=0)):
+        if research_record_store is None: return {"items": [], "total": 0, "limit": limit, "offset": offset}
+        try: return research_record_store.list(symbol=symbol.strip().upper() if symbol else None, limit=limit, offset=offset)
+        except Exception as exc: raise HTTPException(status_code=503, detail="research records unavailable") from exc
+
+    @app.get("/api/research-records/{record_id}")
+    def research_record(record_id: str):
+        if research_record_store is None: raise HTTPException(status_code=404, detail="research record not found")
+        try: return research_record_store.get(record_id)
+        except ResearchRecordNotFound as exc: raise HTTPException(status_code=404, detail="research record not found") from exc
+        except ResearchRecordCorrupt as exc: raise HTTPException(status_code=500, detail="research record is corrupt or incompatible") from exc
+
     @app.post("/api/sec/answer")
     def answer(request: AnswerRequest):
         if answer_service is None:
@@ -133,12 +149,45 @@ def create_app(service: RetrievalService, static_dir=None, answer_service=None):
         def failure(status_code: int, detail: str):
             calls_after = getattr(answer_service, "model_call_count", calls_before)
             attempted = max(0, calls_after - calls_before)
+            meta = {"record_id": None, "save_status": "not_configured", "review_status": "not_reviewed"}
+            if research_record_store is not None:
+                try: meta = research_record_store.save_failure(symbol=request.symbol, question=request.question, detail=detail)
+                except Exception: meta["save_status"] = "failed"
             return JSONResponse(status_code=status_code, content={"status": "failed", "answer_status": "failed",
                 "detail": detail, "generation": {"provider": "ollama_local", "local_model_calls": attempted,
-                    "llm_calls": attempted, "external_network_executed": False}})
+                    "llm_calls": attempted, "external_network_executed": False}, "research_record": meta})
         try:
             payload = validated_search(request)
-            return answer_service.generate(question=request.question, retrieval_payload=payload)
+            captured = {}
+            def capture(value): captured.update(value)
+            supports_callback = "request_callback" in inspect.signature(answer_service.generate).parameters
+            if supports_callback:
+                result = answer_service.generate(question=request.question, retrieval_payload=payload, request_callback=capture)
+            else:
+                result = answer_service.generate(question=request.question, retrieval_payload=payload)
+            record_meta = {"record_id": None, "save_status": "not_configured", "review_status": "not_reviewed"}
+            if research_record_store is not None:
+                try:
+                    packed = captured.get("packed_evidence", [])
+                    originals = captured.get("original_rows", [])
+                    full_evidence = []
+                    for item, original in zip(packed, originals):
+                        full_evidence.append({**original, **item, "chunk_id": original.get("chunk_id", ""), "accession_number": original.get("accession_number", ""), "source_url": original.get("source_url", "")})
+                    gen = result.get("generation", {})
+                    bm = getattr(service, "bm25_manifest", {}) or {}
+                    dn = getattr(service, "dense_manifest", {}) or {}
+                    def manifest_file_sha(path):
+                        try:
+                            p = Path(path) / "manifest.json"
+                            return hashlib.sha256(p.read_bytes()).hexdigest() if p.is_file() and not p.is_symlink() else None
+                        except OSError:
+                            return None
+                    fingerprints = {"bm25_manifest_sha256": manifest_file_sha(service.paths[0]) if hasattr(service, "paths") else None, "dense_manifest_sha256": manifest_file_sha(service.paths[1]) if hasattr(service, "paths") else None}
+                    record_meta = research_record_store.save(symbol=request.symbol, question=request.question, answer_status=result.get("answer_status", "failed"), answer=result.get("answer", {}), citations=result.get("citations", []), evidence=full_evidence, filters=payload.get("filters", {}), generation=gen, packed_evidence=packed, model_metadata={"prompt_hash": captured.get("prompt_hash", ""), "model_digest": gen.get("model_digest", ""), "corpus_fingerprint": fingerprints, "original_rows": originals})
+                except Exception:
+                    record_meta = {"record_id": None, "save_status": "failed", "review_status": "not_reviewed"}
+            result["research_record"] = record_meta
+            return result
         except HTTPException: raise
         except AnswerValidationError:
             return failure(502, "本地模型输出未通过证据校验；SEC 证据检索仍可使用。")

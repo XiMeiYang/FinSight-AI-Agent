@@ -8,7 +8,8 @@ from __future__ import annotations
 
 import json
 import re
-from typing import Any
+import hashlib
+from typing import Any, Callable
 
 try:
     from .ollama_client import OllamaError
@@ -97,12 +98,13 @@ def _ordered_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 class AnswerService:
-    def __init__(self, client: Any, char_budget: int = 12_000):
+    def __init__(self, client: Any, char_budget: int = 12_000, request_callback: Callable[[dict[str, Any]], None] | None = None):
         if not isinstance(char_budget, int) or char_budget < 1:
             raise ValueError("char_budget must be positive")
         self.client = client
         self.char_budget = char_budget
         self._model_call_count = 0
+        self.request_callback = request_callback
 
     @property
     def model_call_count(self) -> int:
@@ -224,7 +226,7 @@ class AnswerService:
         parsed["limitations"] = list(_SAFE_LIMITATIONS)
         return parsed
 
-    def generate(self, question: str, retrieval_payload: dict[str, Any]) -> dict[str, Any]:
+    def generate(self, question: str, retrieval_payload: dict[str, Any], request_callback: Callable[[dict[str, Any]], None] | None = None) -> dict[str, Any]:
         rows = _ordered_rows(retrieval_payload if isinstance(retrieval_payload, dict) else {})
         if not rows:
             return {"answer_status": "evidence_insufficient", "answer": {"direct_answer": {"text": "", "evidence_ids": []}, "key_points": [], "limitations": ["没有足够的 SEC 证据支持回答。"]}, "citations": [], "evidence": [], "model_calls": 0, "generation": {"provider": "ollama_local", "local_model_calls": 0, "llm_calls": 0, "model_calls": 0, "external_network_executed": False, "evidence_sent_count": 0}}
@@ -242,6 +244,9 @@ class AnswerService:
                   "无法由证据回答时必须使用 evidence_insufficient，此时 direct_answer.text 可为空。"
                   "不要输出 URL、分数、元数据、思考过程或置信度百分比。")
         user = json.dumps({"question": _text(question), "evidence": packed}, ensure_ascii=False)
+        callback = request_callback or self.request_callback
+        if callback is not None:
+            callback({"question": _text(question), "packed_evidence": packed, "original_rows": original_rows, "system_prompt": system, "prompt_hash": hashlib.sha256(system.encode("utf-8")).hexdigest(), "model_metadata": {}})
         calls_before = self.model_call_count
         try:
             self._model_call_count += 1

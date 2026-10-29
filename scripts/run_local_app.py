@@ -15,12 +15,14 @@ def main():
     parser.add_argument("--host", default="127.0.0.1"); parser.add_argument("--port", type=int, default=8000)
     parser.add_argument("--enable-ollama", action="store_true", help="Enable an opt-in local SEC answer after evidence search")
     parser.add_argument("--ollama-model", default="qwen3:4b", help="Explicit local Ollama model name (default: qwen3:4b)")
+    parser.add_argument("--research-record-db", default=str(ROOT / ".local_data/research/sec-research-records.sqlite3"))
     args = parser.parse_args()
     if args.host not in {"127.0.0.1", "localhost", "::1"}:
         parser.error("host must be loopback-only")
     try:
         import uvicorn
         from finsight_app.api import create_app
+        from finsight_app.research_records import ResearchRecordStore
         from finsight_app.retrieval_service import RetrievalService
         service = RetrievalService(args.bm25_index, args.dense_index, args.corpus, args.model_cache, args.model_revision, args.model_name)
         answer_service = None
@@ -28,7 +30,7 @@ def main():
             from finsight_app.answer_service import AnswerService
             from finsight_app.ollama_client import OllamaClient
             answer_service = AnswerService(OllamaClient(model=args.ollama_model))
-        app = create_app(service, ROOT / "prototype", answer_service=answer_service)
+        app = create_app(service, ROOT / "prototype", answer_service=answer_service, research_record_store=ResearchRecordStore(args.research_record_db))
         uvicorn.run(app, host=args.host, port=args.port, log_level="warning")
     except Exception as exc:
         print("local app could not start: dependency or offline corpus validation failed", file=sys.stderr)

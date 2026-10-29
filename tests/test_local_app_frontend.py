@@ -12,8 +12,54 @@ INDEX_HTML = APP_JS.with_name("index.html")
 class LocalAppFrontendTests(unittest.TestCase):
     def test_html_versions_updated_static_assets(self):
         html = INDEX_HTML.read_text(encoding="utf-8")
-        self.assertIn('app.js?v=local-ollama-rag-20261008', html)
-        self.assertIn('styles.css?v=local-ollama-rag-20261008', html)
+        self.assertIn('app.js?v=research-records-20261030', html)
+        self.assertIn('styles.css?v=research-records-20261030', html)
+
+    def test_research_records_are_read_only_escaped_and_record_scoped(self):
+        """Synthetic contract check: history uses only record GETs and local citation targets."""
+        source = APP_JS.read_text(encoding="utf-8")
+        self.assertIn("fetch(`/api/research-records?${query.toString()}`)", source)
+        self.assertIn("fetch(`/api/research-records/${encodeURIComponent(recordId)}`)", source)
+        self.assertNotIn("/api/sec/evidence-search", source[source.index("async function researchRecords"):source.index("function openModal")])
+        self.assertNotIn("/api/sec/answer", source[source.index("async function researchRecords"):source.index("function openModal")])
+        self.assertIn("escapeHtml(record.question", source)
+        self.assertIn("data-evidence-target", source)
+        self.assertIn("data-evidence-id", source)
+        self.assertIn("事实内容尚未人工核验", source)
+        self.assertIn("研究记录暂时不可用", source)
+        self.assertIn("回答已生成，但研究记录", source)
+        self.assertIn("pending_human_review: '待人工复核'", source)
+        self.assertIn("statusLabel(record.review_status || 'unreviewed')", source)
+
+    def test_research_record_runtime_xss_and_no_model_calls(self):
+        script = r"""
+const fs = require('fs'), vm = require('vm'), assert = require('assert');
+const malicious = '<img src=x onerror=alert(1)><script>alert(2)</script>';
+let documentClick, fetchCalls = [], recordRow;
+class Node {
+  constructor(selector='') { this.selector=selector; this.children=[]; this.dataset={}; this.listeners={}; this.classList={add(){},remove(){}}; this.open=false; }
+  set innerHTML(value) { this._html=String(value); this.children=[]; if (this.selector==='#app' && this._html.includes('record-row')) { recordRow=new Node('.record-row'); recordRow.dataset.recordId='r-1'; this.children=[recordRow]; } if (this.selector==='#app' && this._html.includes('record-citation')) { const cite=new Node('.record-citation'); cite.dataset.evidenceTarget='E1'; this.children=[cite]; } }
+  get innerHTML(){return this._html||'';}
+  get textContent(){return this._text||'';} set textContent(v){this._text=String(v);}
+  addEventListener(type, fn){this.listeners[type]=fn; if(this.selector==='.record-row' && type==='click') globalThis.lastRecordClick=fn;}
+  querySelector(sel){ return this.children.find(n=>n.selector===sel) || nodes[sel] || new Node(sel); }
+  querySelectorAll(sel){ return this.children.filter(n=>n.selector===sel); }
+  append(...items){this.children.push(...items);}
+  replaceChildren(...items){this.children=items;}
+  closest(sel){return sel==='[data-view]' ? this : null;}
+  scrollIntoView(){}
+  setAttribute(){}
+  focus(){}
+}
+const nodes={}; ['#app','#modal','#modal-body','#modal-title','#page-title','#page-eyebrow','#global-notice','#environment-label','#sidebar-state','.close'].forEach(k=>nodes[k]=new Node(k));
+const document={querySelector:k=>nodes[k]||new Node(k), querySelectorAll:k=>k==='.record-row'?nodes['#app'].children.filter(n=>n.selector==='.record-row'):k==='.record-citation'?nodes['#app'].children.filter(n=>n.selector==='.record-citation'):[], addEventListener:(type,fn)=>{if(type==='click'&&!documentClick)documentClick=fn;}, createElement:tag=>new Node(tag)};
+const fetch=async(url,opts)=>{fetchCalls.push(url); if(url==='/api/health') return {ok:true,json:async()=>({corpus_as_of:'synthetic',document_count:1,chunk_count:1})}; if(url==='/api/securities') return {ok:true,json:async()=>({securities:[{symbol:'NVDA',company_name:'Synthetic',document_count:1,chunk_count:1,available_forms:[]}]})}; if(url.startsWith('/api/research-records?')) return {ok:true,json:async()=>({items:[{record_id:'r-1',symbol:'NVDA',question:malicious,created_at:'synthetic',save_status:'saved',review_status:'pending_human_review'}],total:1,limit:10,offset:0})}; if(url==='/api/research-records/r-1') return {ok:true,json:async()=>({record_id:'r-1',symbol:'NVDA',question:malicious,answer:{direct_answer:{text:malicious,evidence_ids:['E1']},key_points:[{text:malicious,evidence_ids:['E1']}]},citations:[{evidence_id:'E1'}],evidence:[{evidence_id:'E1',symbol:'NVDA',evidence_excerpt:malicious,source_url:'https://evil.example/?x=" onmouseover="alert(9)'}],save_status:'saved',review_status:'pending_human_review',data_as_of:'synthetic'})}; throw Error('unexpected network '+url);};
+vm.runInNewContext(fs.readFileSync(process.argv[1],'utf8'),{document,window:{scrollTo(){},setTimeout},URL,URLSearchParams,FormData,fetch,console});
+setTimeout(async()=>{ documentClick({target:{closest:()=>({dataset:{view:'history'}})}}); await new Promise(r=>setTimeout(r,50)); assert.ok(recordRow && typeof recordRow.listeners.click==='function'); recordRow.listeners.click(); await new Promise(r=>setTimeout(r,50)); const html=nodes['#app'].innerHTML; assert.ok(!html.includes(malicious)); assert.ok(html.includes('&lt;img')); assert.ok(html.includes('&lt;script')); assert.ok(!html.includes('href="https://evil.example')); assert.ok(!html.includes('onmouseover=')); assert.ok(html.includes('待人工复核')); assert.ok(!html.includes('pending_human_review')); assert.deepStrictEqual(fetchCalls.filter(u=>u.includes('/api/sec/')),[]); process.stdout.write('research record runtime checks passed\n'); },0);
+"""
+        result = subprocess.run(["node", "-e", script, str(APP_JS)], capture_output=True, text=True, check=False)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.strip(), "research record runtime checks passed")
 
     def test_evidence_layout_and_escaping(self):
         script = r"""

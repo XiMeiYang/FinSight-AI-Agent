@@ -18,13 +18,15 @@
 
   function setPageMeta(view, title) {
     const isRealEvidence = view === 'sec-evidence';
-    pageEyebrow.textContent = isRealEvidence ? 'SEC EVIDENCE SEARCH' : view === 'home' ? 'RESEARCH WORKSPACE' : view === 'process' ? 'DATA PREPARATION' : 'FOLLOW-UP MODULE';
+    const isResearchRecord = view === 'history';
+    pageEyebrow.textContent = isRealEvidence ? 'SEC EVIDENCE SEARCH' : isResearchRecord ? 'SAVED RESEARCH RECORDS' : view === 'home' ? 'RESEARCH WORKSPACE' : view === 'process' ? 'DATA PREPARATION' : 'FOLLOW-UP MODULE';
     pageTitle.textContent = title;
     globalNotice.textContent = isRealEvidence
       ? '当前仅检索已保存的 SEC 文件证据，不生成 LLM 回答；其他演示页面仍为 Mock Data。'
+      : isResearchRecord ? '当前读取本地已保存的 SEC 研究记录，不会重新检索或调用模型；事实内容尚未人工核验。'
       : '当前页面是离线原型，行情、财务事实和图表均为演示数据，不代表真实分析。';
-    environmentLabel.innerHTML = isRealEvidence ? '本地离线 · <span>真实 SEC 语料</span>' : '演示环境 · <span>Mock Data</span>';
-    sidebarState.textContent = isRealEvidence ? '本地 SEC 证据检索' : 'Prototype / Mock Data';
+    environmentLabel.innerHTML = isRealEvidence ? '本地离线 · <span>真实 SEC 语料</span>' : isResearchRecord ? '本地离线 · <span>已保存研究记录</span>' : '演示环境 · <span>Mock Data</span>';
+    sidebarState.textContent = isRealEvidence ? '本地 SEC 证据检索' : isResearchRecord ? '本地 SEC 研究记录' : 'Prototype / Mock Data';
     document.querySelectorAll('.nav-item').forEach((item) => item.classList.toggle('active', item.dataset.view === (view === 'process' || view === 'report' ? 'home' : view)));
   }
 
@@ -84,6 +86,16 @@
     const citations = new Map((Array.isArray(payload.citations) ? payload.citations : []).map((item) => [item.evidence_id, item]));
     const card = element('section', 'panel local-answer');
     card.append(element('h2', '', '本地模型生成的中文回答'));
+    const record = payload.research_record || {};
+    const saveStatus = record.save_status || '未提供';
+    const saveMessage = saveStatus === 'saved' ? '回答已保存为研究记录。' : `回答已生成，但研究记录${statusLabel(saveStatus) === '未提供' ? '保存状态未提供' : `保存${statusLabel(saveStatus)}`}。`;
+    card.append(element('p', saveStatus === 'saved' ? 'notice' : 'notice', saveMessage));
+    if (record.record_id) {
+      const recordLink = element('button', 'button-link', '打开研究记录');
+      recordLink.type = 'button';
+      recordLink.addEventListener('click', () => researchRecordDetail(record.record_id));
+      card.append(recordLink);
+    }
     card.append(element('p', 'small muted', `模型：${payload.generation?.model || '未标注'} · 生成耗时：${payload.generation?.total_duration_ms ?? '未提供'} ms · 本地调用：${payload.generation?.local_model_calls ?? '未提供'} · 外部数据请求：无`));
     const addReferences = (parent, refs) => {
       (Array.isArray(refs) ? refs : []).forEach((ref) => {
@@ -316,8 +328,70 @@
   function runlog() { openModal('运行记录（Prototype / Mock）', `<table><tbody>${[['run_id', 'demo-run-nvda-001'], ['symbol', 'NVDA'], ['started_at', '2026-09-18T20:00:00Z'], ['completed_at', '2026-09-18T20:00:03Z'], ['data_as_of', '2026-09-18T20:00:00Z'], ['market_source', 'saved daily snapshot (Mock)'], ['SEC source', 'SEC fixture (Mock)'], ['task_status', 'completed (prototype)'], ['missing_data', 'news timeline'], ['warnings', 'not investment advice; RAG not implemented'], ['export_status', 'preview only; not downloaded']].map(([key, value]) => `<tr><th>${key}</th><td>${value}</td></tr>`).join('')}</tbody></table>`); }
 
   function secondary(view) {
-    const titles = { watchlist: '我的自选股', daily: '收盘报告', history: '历史复盘' };
+    if (view === 'history') return researchRecords();
+    const titles = { watchlist: '我的自选股', daily: '收盘报告' };
     render(`<div class="panel placeholder"><span class="tag">后续功能</span><h2>${titles[view]}</h2><p class="muted">该页面保留用于范围展示，当前不抢占 P0 验证路径。</p><div class="notice">待实现：分钟级监测、条件式邮件投递、5/20 交易日复盘和真实数据连接。</div><div class="actions"><button class="primary" data-view="home">回到搜索首页</button></div></div>`, view, titles[view]);
+  }
+
+  function statusLabel(value) {
+    const labels = { saved: '已保存', completed: '已完成', pending: '待处理', failed: '失败', not_saved: '未保存', reviewed: '已人工核验', unreviewed: '尚未人工核验', pending_human_review: '待人工复核' };
+    return labels[value] || (value ? String(value) : '未提供');
+  }
+
+  function recordEvidenceCard(item, index) {
+    const evidenceId = item.evidence_id || item.id || `evidence-${index + 1}`;
+    const source = safeSecUrl(item.source_url);
+    return `<article class="card evidence-result record-evidence" data-evidence-id="${escapeHtml(evidenceId)}">
+      <div class="evidence-result-head"><span class="tag">证据 ${escapeHtml(evidenceId)}</span><strong>${escapeHtml(item.symbol || '')} · ${escapeHtml(item.form || 'SEC')}</strong><span class="muted">${escapeHtml(item.filing_date || item.published_at || '日期未提供')}</span></div>
+      <p class="evidence-section">${escapeHtml(item.section_title || item.section || item.location || '来源定位未提供')}</p>
+      <p class="evidence-preview">${escapeHtml(item.evidence_excerpt || item.text || item.excerpt || '原文片段未提供')}</p>
+      <p class="small muted">来源：${source ? `<a href="${escapeHtml(source)}" target="_blank" rel="noopener noreferrer">SEC 原始文件</a>` : '链接未通过校验'} · 截止时间：${escapeHtml(item.data_as_of || item.corpus_as_of || '未提供')}</p>
+    </article>`;
+  }
+
+  function recordStatus(record) {
+    return `<span class="record-status">保存：${escapeHtml(statusLabel(record.save_status))} · 审阅：${escapeHtml(statusLabel(record.review_status || 'unreviewed'))}</span>`;
+  }
+
+  async function researchRecords() {
+    render('<div class="panel"><h2>正在读取研究记录…</h2><p class="muted">仅读取本地已保存记录，不会重新检索或调用模型。</p></div>', 'history', '研究记录');
+    let limit = 10;
+    let offset = 0;
+    let symbol = '';
+    const load = async () => {
+      const query = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+      if (symbol) query.set('symbol', symbol);
+      const response = await fetch(`/api/research-records?${query.toString()}`);
+      if (!response.ok) throw new Error('研究记录暂时不可用。');
+      const payload = await response.json();
+      const items = Array.isArray(payload.items) ? payload.items : [];
+      const list = items.map((record) => `<button type="button" class="record-row" data-record-id="${escapeHtml(record.record_id)}"><span><b>${escapeHtml(record.symbol || '未知证券')}</b><span class="record-question">${escapeHtml(record.question || '问题未提供')}</span></span><span>${escapeHtml(record.created_at || '时间未提供')}<br>${recordStatus(record)}</span></button>`).join('');
+      render(`<section class="panel records-panel"><span class="tag">本地 SEC 研究记录</span><h2>研究记录</h2><p class="muted">这里仅展示已保存的研究回答与证据，不是 5/20 个交易日历史复盘。<br><b>事实内容尚未人工核验。</b></p><form id="records-filter" class="records-filter"><label>股票筛选<input name="symbol" value="${escapeHtml(symbol)}" maxlength="12" placeholder="例如 NVDA"></label><button class="primary" type="submit">筛选</button></form>${items.length ? `<div class="record-list">${list}</div>` : '<div class="notice">没有找到已保存的研究记录；不会自动重新生成。</div>'}<div class="records-pagination"><button type="button" id="records-prev" ${offset <= 0 ? 'disabled' : ''}>上一页</button><span>第 ${Math.floor(offset / limit) + 1} 页 · 共 ${escapeHtml(payload.total ?? items.length)} 条</span><button type="button" id="records-next" ${offset + limit >= Number(payload.total || 0) ? 'disabled' : ''}>下一页</button></div></section>`, 'history', '研究记录');
+      document.querySelector('#records-filter').addEventListener('submit', (event) => { event.preventDefault(); symbol = new FormData(event.currentTarget).get('symbol').trim().toUpperCase(); offset = 0; load(); });
+      document.querySelector('#records-prev').addEventListener('click', () => { offset = Math.max(0, offset - limit); load(); });
+      document.querySelector('#records-next').addEventListener('click', () => { offset += limit; load(); });
+      document.querySelectorAll('.record-row').forEach((button) => button.addEventListener('click', () => researchRecordDetail(button.dataset.recordId)));
+    };
+    try { await load(); } catch (_) { render('<div class="panel"><h2>研究记录不可用</h2><p class="muted">无法读取本地保存记录；不会自动重新生成回答。</p></div>', 'history', '研究记录'); }
+  }
+
+  async function researchRecordDetail(recordId) {
+    render('<div class="panel"><h2>正在读取研究记录…</h2><p class="muted">不会重新检索或调用模型。</p></div>', 'history', '研究记录详情');
+    try {
+      const response = await fetch(`/api/research-records/${encodeURIComponent(recordId)}`);
+      if (!response.ok) throw new Error('记录不存在或读取失败。');
+      const record = await response.json();
+      const evidence = Array.isArray(record.evidence) ? record.evidence : [];
+      const citations = Array.isArray(record.citations) ? record.citations : [];
+      const answer = record.answer && typeof record.answer === 'object' ? record.answer : {};
+      const answerText = answer.direct_answer?.text || answer.text || '未保存可展示的回答。';
+      const citationButtons = (answer.direct_answer?.evidence_ids || []).map((id) => `<button type="button" class="record-citation" data-evidence-target="${escapeHtml(id)}">[${escapeHtml(id)}]</button>`).join('');
+      const keyPoints = Array.isArray(answer.key_points) ? answer.key_points : [];
+      const pointMarkup = keyPoints.map((point) => `<li>${escapeHtml(point.text || point)} ${(point.evidence_ids || []).map((id) => `<button type="button" class="record-citation" data-evidence-target="${escapeHtml(id)}">[${escapeHtml(id)}]</button>`).join('')}</li>`).join('');
+      render(`<section class="panel record-detail"><div class="section-title"><div><span class="tag">${escapeHtml(record.symbol || '未知证券')} · 研究记录</span><h2>${escapeHtml(record.question || '问题未提供')}</h2></div><button type="button" id="records-back">返回列表</button></div><p class="muted">记录 ID：${escapeHtml(record.record_id || recordId)} · 创建时间：${escapeHtml(record.created_at || '未提供')}</p><div class="notice"><b>事实内容尚未人工核验。</b> ${recordStatus(record)} · 数据截止：${escapeHtml(record.data_as_of || record.filters?.as_of || '未提供')}</div><h3>当时回答</h3><p class="record-answer">${escapeHtml(answerText)} ${citationButtons}</p>${pointMarkup ? `<h3>关键要点</h3><ul>${pointMarkup}</ul>` : ''}<h3>保存证据（${escapeHtml(evidence.length)} 条）</h3><div class="evidence-list">${evidence.length ? evidence.map(recordEvidenceCard).join('') : '<div class="notice">该记录没有保存证据，无法验证回答。</div>'}</div></section>`, 'history', '研究记录详情');
+      document.querySelector('#records-back').addEventListener('click', researchRecords);
+      document.querySelectorAll('.record-citation').forEach((button) => button.addEventListener('click', () => { const target = Array.from(document.querySelectorAll('[data-evidence-id]')).find((item) => item.dataset.evidenceId === button.dataset.evidenceTarget); if (target) { target.scrollIntoView({ behavior: 'smooth', block: 'center' }); target.classList.add('citation-highlight'); window.setTimeout(() => target.classList.remove('citation-highlight'), 3000); } }));
+    } catch (_) { render('<div class="panel"><h2>研究记录损坏或不存在</h2><p class="muted">无法展示这条记录；不会自动重新生成。</p><button class="primary" id="records-back">返回研究记录</button></div>', 'history', '研究记录'); document.querySelector('#records-back').addEventListener('click', researchRecords); }
   }
 
   function openModal(modalHeading, content) { modalTitle.textContent = modalHeading; modalBody.innerHTML = content; modal.classList.add('open'); modal.setAttribute('aria-hidden', 'false'); modal.querySelector('.close').focus(); }
@@ -333,7 +407,7 @@
 // Keep the shell title aligned with the active prototype view.
 document.addEventListener('click', function (event) {
   var view = event.target.closest('[data-view]')?.dataset.view;
-  var titles = { 'sec-evidence': 'SEC 证据检索', home: '演示研究', watchlist: '我的自选股', daily: '收盘报告', history: '历史复盘' };
+  var titles = { 'sec-evidence': 'SEC 证据检索', home: '演示研究', watchlist: '我的自选股', daily: '收盘报告', history: '研究记录' };
   if (view && titles[view]) {
     var heading = document.querySelector('.topbar h1');
     if (heading) heading.textContent = titles[view];
