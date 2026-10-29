@@ -3,7 +3,6 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Optional
 import inspect
-import hashlib
 import unicodedata
 
 try:
@@ -130,6 +129,7 @@ def create_app(service: RetrievalService, static_dir=None, answer_service=None, 
     def research_records(symbol: Optional[str] = Query(default=None, max_length=10), limit: int = Query(default=20, ge=1, le=100), offset: int = Query(default=0, ge=0)):
         if research_record_store is None: return {"items": [], "total": 0, "limit": limit, "offset": offset}
         try: return research_record_store.list(symbol=symbol.strip().upper() if symbol else None, limit=limit, offset=offset)
+        except ResearchRecordCorrupt as exc: raise HTTPException(status_code=500, detail="research record is corrupt or incompatible") from exc
         except Exception as exc: raise HTTPException(status_code=503, detail="research records unavailable") from exc
 
     @app.get("/api/research-records/{record_id}")
@@ -138,6 +138,7 @@ def create_app(service: RetrievalService, static_dir=None, answer_service=None, 
         try: return research_record_store.get(record_id)
         except ResearchRecordNotFound as exc: raise HTTPException(status_code=404, detail="research record not found") from exc
         except ResearchRecordCorrupt as exc: raise HTTPException(status_code=500, detail="research record is corrupt or incompatible") from exc
+        except Exception as exc: raise HTTPException(status_code=503, detail="research records unavailable") from exc
 
     @app.post("/api/sec/answer")
     def answer(request: AnswerRequest):
@@ -174,15 +175,15 @@ def create_app(service: RetrievalService, static_dir=None, answer_service=None, 
                     for item, original in zip(packed, originals):
                         full_evidence.append({**original, **item, "chunk_id": original.get("chunk_id", ""), "accession_number": original.get("accession_number", ""), "source_url": original.get("source_url", "")})
                     gen = result.get("generation", {})
-                    bm = getattr(service, "bm25_manifest", {}) or {}
-                    dn = getattr(service, "dense_manifest", {}) or {}
-                    def manifest_file_sha(path):
-                        try:
-                            p = Path(path) / "manifest.json"
-                            return hashlib.sha256(p.read_bytes()).hexdigest() if p.is_file() and not p.is_symlink() else None
-                        except OSError:
-                            return None
-                    fingerprints = {"bm25_manifest_sha256": manifest_file_sha(service.paths[0]) if hasattr(service, "paths") else None, "dense_manifest_sha256": manifest_file_sha(service.paths[1]) if hasattr(service, "paths") else None}
+                    # Save the exact snapshot used for this answer.  Do not
+                    # reread manifests after generation: the loaded service
+                    # owns the verified fingerprint and a replaced disk file
+                    # must not silently relabel the saved record.
+                    fingerprints = dict(getattr(service, "corpus_fingerprint", {}) or {})
+                    fingerprints.setdefault("bm25_manifest_sha256", None)
+                    fingerprints.setdefault("dense_manifest_sha256", None)
+                    fingerprints.setdefault("bm25_manifest_logic_sha256", None)
+                    fingerprints.setdefault("dense_manifest_logic_sha256", None)
                     record_meta = research_record_store.save(symbol=request.symbol, question=request.question, answer_status=result.get("answer_status", "failed"), answer=result.get("answer", {}), citations=result.get("citations", []), evidence=full_evidence, filters=payload.get("filters", {}), generation=gen, packed_evidence=packed, model_metadata={"prompt_hash": captured.get("prompt_hash", ""), "model_digest": gen.get("model_digest", ""), "corpus_fingerprint": fingerprints, "original_rows": originals})
                 except Exception:
                     record_meta = {"record_id": None, "save_status": "failed", "review_status": "not_reviewed"}

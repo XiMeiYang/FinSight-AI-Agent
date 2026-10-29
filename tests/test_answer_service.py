@@ -31,6 +31,18 @@ class AnswerServiceTests(unittest.TestCase):
         result = AnswerService(client).generate("问题", {"results": []})
         self.assertEqual(result["answer_status"], "evidence_insufficient")
         self.assertEqual(result["generation"]["model_calls"], 0)
+        self.assertTrue(result["answer"]["direct_answer"]["text"])
+        self.assertEqual(result["answer"]["direct_answer"]["evidence_ids"], [])
+        self.assertEqual(result["answer"]["key_points"], [])
+        self.assertFalse(client.calls)
+
+    def test_no_packable_evidence_returns_same_nonempty_explanation(self):
+        client = FakeClient(answer())
+        result = AnswerService(client, char_budget=80).generate("问题", payload(1))
+        self.assertEqual(result["answer_status"], "evidence_insufficient")
+        self.assertEqual(result["answer"]["direct_answer"]["text"], "证据不足，当前无法基于已检索内容可靠回答。")
+        self.assertEqual(result["answer"]["direct_answer"]["evidence_ids"], [])
+        self.assertEqual(result["answer"]["key_points"], [])
         self.assertFalse(client.calls)
 
     def test_valid_response_assigns_stable_ids_and_copies_backend_citations(self):
@@ -174,6 +186,13 @@ class AnswerServiceTests(unittest.TestCase):
     def test_evidence_insufficient_direct_text_must_be_chinese(self):
         client = FakeClient(answer("evidence_insufficient", extra={"direct_answer": {"text": "", "evidence_ids": []}}))
         with self.assertRaises(AnswerServiceError): AnswerService(client).generate("问题", payload())
+
+    def test_evidence_insufficient_allows_empty_refs_and_key_points(self):
+        client = FakeClient(answer("evidence_insufficient", extra={"direct_answer": {"text": "证据不足，无法可靠回答。", "evidence_ids": []}, "key_points": []}))
+        result = AnswerService(client).generate("问题", payload())
+        self.assertEqual(result["answer_status"], "evidence_insufficient")
+        self.assertEqual(result["answer"]["direct_answer"]["evidence_ids"], [])
+        self.assertEqual(result["answer"]["key_points"], [])
 
     def test_model_failure_is_safe_and_not_claimed_completed(self):
         class Broken:

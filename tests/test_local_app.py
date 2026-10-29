@@ -14,6 +14,7 @@ except ImportError:
 from finsight_app.api import create_app
 from finsight_app.ollama_client import OllamaModelMissing, OllamaTimeout, OllamaUnavailable
 from finsight_app.retrieval_service import RetrievalService
+from finsight_app.research_records import ResearchRecordStore, ResearchRecordCorrupt
 
 
 AS_OF = "2026-09-18T23:59:59Z"
@@ -240,6 +241,44 @@ class LocalAppTests(unittest.TestCase):
                 self.assertEqual(response.json()["generation"]["llm_calls"], expected_calls)
                 self.assertEqual(client.post("/api/sec/evidence-search", json={"symbol": "SYN", "question": "What risks?"}).status_code, 200)
 
+    def test_evidence_insufficient_answer_is_saved_and_history_preserves_status(self):
+        class EvidenceInsufficientModel(FakeAnswerService):
+            def generate(self, question, retrieval_payload):
+                self.calls.append((question, retrieval_payload))
+                self.model_call_count += 1
+                return {"answer_status": "evidence_insufficient",
+                        "answer": {"answer_status": "evidence_insufficient",
+                                   "direct_answer": {"text": "证据不足", "evidence_ids": []},
+                                   "key_points": [], "limitations": ["证据不足"]},
+                        "citations": [], "evidence": [],
+                        "generation": {"provider": "ollama_local", "model_digest": "synthetic"}}
+        with tempfile.TemporaryDirectory() as directory:
+            store = ResearchRecordStore(Path(directory) / "records.sqlite3")
+            client = TestClient(create_app(self.service, answer_service=EvidenceInsufficientModel(), research_record_store=store))
+            response = client.post("/api/sec/answer", json={"symbol": "SYN", "question": "What risks?"})
+            self.assertEqual(response.status_code, 200)
+            record_id = response.json()["research_record"]["record_id"]
+            history = client.get("/api/research-records/" + record_id)
+            self.assertEqual(history.status_code, 200)
+            self.assertEqual(history.json()["answer_status"], "evidence_insufficient")
+            store.close()
+
+    def test_corrupt_history_list_returns_500(self):
+        class CorruptStore:
+            def list(self, **_kwargs):
+                raise ResearchRecordCorrupt("synthetic corruption")
+        response = TestClient(create_app(self.service, research_record_store=CorruptStore())).get("/api/research-records")
+        self.assertEqual(response.status_code, 500)
+        self.assertEqual(response.json(), {"detail": "research record is corrupt or incompatible"})
+
+    def test_history_detail_store_failure_returns_503(self):
+        class BrokenStore:
+            def get(self, _record_id):
+                raise RuntimeError("synthetic store failure")
+        response = TestClient(create_app(self.service, research_record_store=BrokenStore())).get("/api/research-records/synthetic")
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.json(), {"detail": "research records unavailable"})
+
 
 class RetrievalServiceTests(unittest.TestCase):
     def test_indexes_and_model_are_loaded_and_validated_once(self):
@@ -255,6 +294,68 @@ class RetrievalServiceTests(unittest.TestCase):
             bm.assert_called_once()
             dense.assert_called_once()
             compatible.assert_called_once()
+
+    def test_manifest_replacement_during_load_is_rejected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            bm, dense = root / "bm", root / "dense"
+            bm.mkdir(); dense.mkdir()
+            (bm / "manifest.json").write_text('{"index_sha256":"old"}')
+            (dense / "manifest.json").write_text('{"manifest_sha256":"dense-old"}')
+            embedder = mock.Mock(model_name="synthetic-fake", model_revision="synthetic-1")
+            row = {"symbol":"SYN", "company_name":"Synthetic Co", "cik":"1", "form":"10-K", "document_id":"SYN-1", "corpus_as_of":AS_OF}
+            def replace_bm(*_args):
+                (bm / "manifest.json").write_text('{"index_sha256":"replaced"}')
+                return ({"index_sha256":"old"}, [row], object())
+            service = RetrievalService(bm, dense, root / "corpus", root / "models", "synthetic-1", embedder=embedder)
+            with mock.patch("finsight_app.retrieval_service.load_index", side_effect=replace_bm), \
+                 mock.patch("finsight_app.retrieval_service.load_dense_index", return_value=({}, [row], object())), \
+                 mock.patch("finsight_app.retrieval_service.validate_compatible_indexes"):
+                with self.assertRaisesRegex(ValueError, "manifest changed"):
+                    service.load()
+
+    def test_loaded_snapshot_fingerprint_survives_later_manifest_replacement(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory); bm, dense = root / "bm", root / "dense"
+            bm.mkdir(); dense.mkdir()
+            (bm / "manifest.json").write_text('{"index_sha256":"old"}')
+            (dense / "manifest.json").write_text('{"manifest_sha256":"dense-old"}')
+            embedder = mock.Mock(model_name="synthetic-fake", model_revision="synthetic-1")
+            row = {"symbol":"SYN", "company_name":"Synthetic Co", "cik":"1", "form":"10-K", "document_id":"SYN-1", "corpus_as_of":AS_OF}
+            service = RetrievalService(bm, dense, root / "corpus", root / "models", "synthetic-1", embedder=embedder)
+            with mock.patch("finsight_app.retrieval_service.load_index", return_value=({"index_sha256":"old"}, [row], object())), \
+                 mock.patch("finsight_app.retrieval_service.load_dense_index", return_value=({"manifest_sha256":"dense-old"}, [row], object())), \
+                 mock.patch("finsight_app.retrieval_service.validate_compatible_indexes"):
+                service.load()
+            old = dict(service.corpus_fingerprint)
+            (bm / "manifest.json").write_text('{"index_sha256":"new"}')
+            self.assertEqual(service.corpus_fingerprint, old)
+
+    def test_answer_history_uses_loaded_old_manifest_bytes_after_disk_replacement(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory); bm, dense = root / "bm", root / "dense"
+            bm.mkdir(); dense.mkdir()
+            (bm / "manifest.json").write_text('{"index_sha256":"old"}')
+            (dense / "manifest.json").write_text('{"manifest_sha256":"dense-old"}')
+            embedder = mock.Mock(model_name="synthetic-fake", model_revision="synthetic-1")
+            row = {"symbol":"SYN", "company_name":"Synthetic Co", "cik":"1", "form":"10-K", "document_id":"SYN-1", "corpus_as_of":AS_OF}
+            service = RetrievalService(bm, dense, root / "corpus", root / "models", "synthetic-1", embedder=embedder)
+            with mock.patch("finsight_app.retrieval_service.load_index", return_value=({"index_sha256":"old"}, [row], object())), \
+                 mock.patch("finsight_app.retrieval_service.load_dense_index", return_value=({"manifest_sha256":"dense-old"}, [row], object())), \
+                 mock.patch("finsight_app.retrieval_service.validate_compatible_indexes"):
+                service.load()
+                old = dict(service.corpus_fingerprint)
+                (bm / "manifest.json").write_text('{"index_sha256":"new"}')
+                with tempfile.TemporaryDirectory() as records_dir:
+                    store = ResearchRecordStore(Path(records_dir) / "records.sqlite3")
+                    service.search = mock.Mock(return_value={**service.health(), "filters": {"as_of": AS_OF}, "results": [{"symbol":"SYN", "chunk_id":"c1", "source_url":"https://sec.invalid/synthetic", "evidence_excerpt":"synthetic"}]})
+                    client = TestClient(create_app(service, answer_service=FakeAnswerService(), research_record_store=store))
+                    response = client.post("/api/sec/answer", json={"symbol":"SYN", "question":"risk"})
+                    self.assertEqual(response.status_code, 200)
+                    rid = response.json()["research_record"]["record_id"]
+                    detail = client.get("/api/research-records/" + rid).json()
+                    self.assertEqual(detail["model_metadata"]["corpus_fingerprint"], old)
+                    store.close()
 
 
 if __name__ == "__main__":

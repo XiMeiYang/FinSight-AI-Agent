@@ -16,10 +16,62 @@ class ResearchRecordsTests(unittest.TestCase):
   with self.assertRaises(ResearchRecordNotFound): self.s.get('missing')
   rid=self.save()['record_id']; self.s._db.execute('UPDATE research_records SET payload_json=? WHERE record_id=?',(json.dumps({'schema_version':1}),rid)); self.s._db.commit()
   with self.assertRaises(ResearchRecordCorrupt): self.s.get(rid)
+
+ def test_outer_duplicate_conflict_is_corrupt_for_detail_and_list(self):
+  rid=self.save('SYN', 'q')['record_id']
+  row=self.s._db.execute('SELECT payload_json FROM research_records WHERE record_id=?',(rid,)).fetchone()
+  payload=json.loads(row[0]); payload['symbol']='OTHER'
+  raw=json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(',', ':'))
+  digest=__import__('hashlib').sha256(raw.encode()).hexdigest()
+  self.s._db.execute('UPDATE research_records SET payload_json=?, payload_sha256=? WHERE record_id=?',(raw,digest,rid)); self.s._db.commit()
+  with self.assertRaises(ResearchRecordCorrupt): self.s.get(rid)
+  with self.assertRaises(ResearchRecordCorrupt): self.s.list()
+
+ def test_non_object_payload_is_corrupt_for_detail_and_list(self):
+  rid=self.save()['record_id']; raw='[1, 2, 3]'; digest=__import__('hashlib').sha256(raw.encode()).hexdigest()
+  self.s._db.execute('UPDATE research_records SET payload_json=?, payload_sha256=? WHERE record_id=?',(raw,digest,rid)); self.s._db.commit()
+  with self.assertRaises(ResearchRecordCorrupt): self.s.get(rid)
+  with self.assertRaises(ResearchRecordCorrupt): self.s.list()
+
+ def test_legacy_success_without_answer_status_is_readable(self):
+  rid=self.save()['record_id']; row=self.s._db.execute('SELECT payload_json FROM research_records WHERE record_id=?',(rid,)).fetchone()
+  payload=json.loads(row[0]); payload.pop('answer_status'); raw=json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(',', ':')); digest=__import__('hashlib').sha256(raw.encode()).hexdigest()
+  self.s._db.execute('UPDATE research_records SET payload_json=?, payload_sha256=? WHERE record_id=?',(raw,digest,rid)); self.s._db.commit()
+  self.assertEqual(self.s.get(rid)['record_id'], rid); self.assertEqual(self.s.list()['total'], 1)
+
+ def test_success_missing_symbol_and_question_is_corrupt(self):
+  rid=self.save()['record_id']; row=self.s._db.execute('SELECT payload_json FROM research_records WHERE record_id=?',(rid,)).fetchone(); payload=json.loads(row[0]); payload.pop('symbol'); payload.pop('question'); raw=json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(',', ':')); digest=__import__('hashlib').sha256(raw.encode()).hexdigest(); self.s._db.execute('UPDATE research_records SET payload_json=?, payload_sha256=? WHERE record_id=?',(raw,digest,rid)); self.s._db.commit()
+  with self.assertRaises(ResearchRecordCorrupt): self.s.get(rid)
+
+ def test_outer_question_and_answer_status_conflicts_are_corrupt(self):
+  for field, value in (('question', 'other'), ('answer_status', 'failed')):
+   rid=self.save()['record_id']; row=self.s._db.execute('SELECT payload_json FROM research_records WHERE record_id=?',(rid,)).fetchone(); payload=json.loads(row[0]); payload[field]=value
+   raw=json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(',', ':')); digest=__import__('hashlib').sha256(raw.encode()).hexdigest(); self.s._db.execute('UPDATE research_records SET payload_json=?, payload_sha256=? WHERE record_id=?',(raw,digest,rid)); self.s._db.commit()
+   with self.assertRaises(ResearchRecordCorrupt): self.s.get(rid)
+   self.s._db.execute('DELETE FROM research_records WHERE record_id=?',(rid,)); self.s._db.commit()
+
+ def test_nested_payload_invalid_types_are_corrupt(self):
+  rid=self.save()['record_id']; row=self.s._db.execute('SELECT payload_json FROM research_records WHERE record_id=?',(rid,)).fetchone(); payload=json.loads(row[0]); payload['citations']={}
+  raw=json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(',', ':')); digest=__import__('hashlib').sha256(raw.encode()).hexdigest(); self.s._db.execute('UPDATE research_records SET payload_json=?, payload_sha256=? WHERE record_id=?',(raw,digest,rid)); self.s._db.commit()
+  with self.assertRaises(ResearchRecordCorrupt): self.s.get(rid)
  def test_sql_injection_is_data(self):
   self.save("AAA' OR 1=1 --"); self.assertEqual(self.s.list("AAA' OR 1=1 --")['total'],1); self.assertEqual(self.s.list("' OR 1=1")['total'],0)
  def test_failure_status(self):
   x=self.s.save_failure(symbol='SYN',question='q',detail='failed'); r=self.s.get(x['record_id']); self.assertEqual(r['answer_status'],'failed'); self.assertEqual(r['review_status'],'not_reviewed')
+
+ def test_legacy_failure_payload_without_duplicate_fields_is_readable(self):
+  rid='legacy-failure'; payload={'schema_version':1,'filters':{},'answer':{'error':'failed'},'citations':[],'evidence':[],'packed_evidence':[],'generation':{},'model_metadata':{}}
+  raw=json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(',', ':')); digest=__import__('hashlib').sha256(raw.encode()).hexdigest()
+  self.s._db.execute('INSERT INTO research_records VALUES (?,?,?,?,?,?,?,?,?,?)',(rid,'2026-01-01T00:00:00Z','SYN','q','failed','saved','not_reviewed',1,raw,digest)); self.s._db.commit()
+  self.assertEqual(self.s.get(rid)['answer_status'],'failed')
+
+ def test_legacy_failure_status_fields_cannot_conflict(self):
+  for location in ('top', 'answer'):
+   rid='legacy-conflict-'+location; payload={'schema_version':1,'filters':{},'answer':{'error':'failed'},'citations':[],'evidence':[],'packed_evidence':[],'generation':{},'model_metadata':{}}
+   if location == 'top': payload['answer_status']='completed'
+   else: payload['answer']['answer_status']='completed'
+   raw=json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(',', ':')); digest=__import__('hashlib').sha256(raw.encode()).hexdigest(); self.s._db.execute('INSERT INTO research_records VALUES (?,?,?,?,?,?,?,?,?,?)',(rid,'2026-01-01T00:00:00Z','SYN','q','failed','saved','not_reviewed',1,raw,digest)); self.s._db.commit()
+   with self.assertRaises(ResearchRecordCorrupt): self.s.get(rid)
  def test_rejects_ancestor_symlink(self):
   import os
   root=Path(self.t.name)/'real'; root.mkdir(); link=Path(self.t.name)/'link'; os.symlink(root,link)

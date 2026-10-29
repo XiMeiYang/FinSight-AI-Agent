@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import os
+import hashlib
+import json
 from pathlib import Path
 from threading import Lock
 
@@ -23,6 +25,33 @@ class RetrievalService:
         self._loaded = False
         self._lock = Lock()
 
+    @staticmethod
+    def _manifest_state(path):
+        """Return immutable on-disk and declared manifest fingerprints.
+
+        A missing or non-regular manifest is deliberately represented as None;
+        an unknown fingerprint must never be presented as a valid one.
+        """
+        manifest_path = Path(path) / "manifest.json"
+        if manifest_path.is_symlink() or not manifest_path.is_file():
+            return {"file_sha256": None, "logic_sha256": None}
+        try:
+            raw = manifest_path.read_bytes()
+            manifest = json.loads(raw)
+        except (OSError, ValueError, TypeError):
+            return {"file_sha256": None, "logic_sha256": None}
+        if not isinstance(manifest, dict):
+            return {"file_sha256": None, "logic_sha256": None}
+        declared = manifest.get("index_sha256") or manifest.get("manifest_sha256")
+        return {"file_sha256": hashlib.sha256(raw).hexdigest(),
+                "logic_sha256": declared if isinstance(declared, str) and declared else None}
+
+    @classmethod
+    def _fingerprint(cls, path, manifest):
+        declared = (manifest.get("index_sha256") or manifest.get("manifest_sha256")
+                    if isinstance(manifest, dict) else None)
+        return {"logic_sha256": declared if isinstance(declared, str) and declared else None}
+
     def load(self):
         if self._loaded:
             return self
@@ -36,11 +65,27 @@ class RetrievalService:
             if self._embedder is None:
                 self._embedder = BGEEmbedder(self.model_name, self.model_revision,
                                              cache_folder=str(self.paths[3]), local_files_only=True)
+            bm_before = self._manifest_state(self.paths[0])
+            dense_before = self._manifest_state(self.paths[1])
             self.bm25_manifest, self.bm25_rows, self.bm25 = load_index(self.paths[0], self.paths[2])
             self.dense_manifest, self.dense_rows, self.dense_matrix = load_dense_index(
                 self.paths[1], self.paths[2], self._embedder)
             validate_compatible_indexes(self.bm25_manifest, self.bm25_rows,
                 self.dense_manifest, self.dense_rows, embedder=self._embedder)
+            bm_after = self._manifest_state(self.paths[0])
+            dense_after = self._manifest_state(self.paths[1])
+            bm_logic = self._fingerprint(self.paths[0], self.bm25_manifest)["logic_sha256"]
+            dense_logic = self._fingerprint(self.paths[1], self.dense_manifest)["logic_sha256"]
+            if (bm_before != bm_after or dense_before != dense_after or
+                    (bm_logic is not None and bm_after["logic_sha256"] not in (None, bm_logic)) or
+                    (dense_logic is not None and dense_after["logic_sha256"] not in (None, dense_logic))):
+                raise ValueError("index manifest changed while loading")
+            self.corpus_fingerprint = {
+                "bm25_manifest_sha256": bm_after["file_sha256"],
+                "dense_manifest_sha256": dense_after["file_sha256"],
+                "bm25_manifest_logic_sha256": bm_logic,
+                "dense_manifest_logic_sha256": dense_logic,
+            }
             self._loaded = True
         return self
 

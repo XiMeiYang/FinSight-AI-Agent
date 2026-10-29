@@ -62,13 +62,13 @@ class ResearchRecordStore:
         return raw, hashlib.sha256(raw.encode()).hexdigest()
     def save(self, *, symbol: str, question: str, answer_status: str, answer: Any, citations: Any, evidence: Any, filters: Any = None, generation: Any = None, packed_evidence: Any = None, model_metadata: Any = None) -> dict[str, Any]:
         rid = str(uuid.uuid4()); created = self._now()
-        payload = {"schema_version": SCHEMA_VERSION, "data_as_of": (filters or {}).get("as_of"), "filters": filters or {}, "answer": answer, "citations": citations or [], "evidence": evidence or [], "packed_evidence": packed_evidence or [], "generation": generation or {}, "model_metadata": model_metadata or {}, "symbol": symbol, "question": question}
+        payload = {"schema_version": SCHEMA_VERSION, "data_as_of": (filters or {}).get("as_of"), "filters": filters or {}, "answer": answer, "citations": citations or [], "evidence": evidence or [], "packed_evidence": packed_evidence or [], "generation": generation or {}, "model_metadata": model_metadata or {}, "symbol": symbol, "question": question, "answer_status": answer_status}
         raw, digest = self._payload(payload)
         with self._lock, self._db:
             self._db.execute("INSERT INTO research_records VALUES (?,?,?,?,?,?,?,?,?,?)", (rid, created, symbol, question, answer_status, "saved", "pending_human_review", SCHEMA_VERSION, raw, digest))
         return {"record_id": rid, "save_status": "saved", "review_status": "pending_human_review"}
     def save_failure(self, *, symbol: str, question: str, detail: str) -> dict[str, Any]:
-        rid = str(uuid.uuid4()); created = self._now(); payload = {"schema_version": SCHEMA_VERSION, "filters": {}, "answer": {"error": detail}, "citations": [], "evidence": [], "packed_evidence": [], "generation": {}, "model_metadata": {}}
+        rid = str(uuid.uuid4()); created = self._now(); payload = {"schema_version": SCHEMA_VERSION, "filters": {}, "answer": {"error": detail}, "citations": [], "evidence": [], "packed_evidence": [], "generation": {}, "model_metadata": {}, "symbol": symbol, "question": question, "answer_status": "failed"}
         raw, digest = self._payload(payload)
         with self._lock, self._db:
             self._db.execute("INSERT INTO research_records VALUES (?,?,?,?,?,?,?,?,?,?)", (rid, created, symbol, question, "failed", "saved", "not_reviewed", SCHEMA_VERSION, raw, digest))
@@ -77,8 +77,28 @@ class ResearchRecordStore:
         if row["schema_version"] != SCHEMA_VERSION: raise ResearchRecordCorrupt("unsupported research record version")
         try: payload = json.loads(row["payload_json"])
         except Exception as exc: raise ResearchRecordCorrupt("corrupt research record payload") from exc
+        if not isinstance(payload, dict): raise ResearchRecordCorrupt("research record payload must be an object")
         _, digest = self._payload(payload)
         if digest != row["payload_sha256"] or payload.get("schema_version") != SCHEMA_VERSION: raise ResearchRecordCorrupt("research record integrity check failed")
+        required = ("schema_version", "filters", "answer", "citations", "evidence", "packed_evidence", "generation", "model_metadata")
+        if any(key not in payload for key in required): raise ResearchRecordCorrupt("research record payload structure is incomplete")
+        if not isinstance(payload["filters"], dict) or not isinstance(payload["answer"], dict) or not isinstance(payload["generation"], dict) or not isinstance(payload["model_metadata"], dict):
+            raise ResearchRecordCorrupt("research record payload object fields have invalid types")
+        if any(not isinstance(payload[key], list) for key in ("citations", "evidence", "packed_evidence")):
+            raise ResearchRecordCorrupt("research record payload list fields have invalid types")
+        if "data_as_of" in payload and payload["data_as_of"] != payload["filters"].get("as_of"):
+            raise ResearchRecordCorrupt("research record date fields conflict")
+        # Older failure rows predate duplicated symbol/question/status fields.
+        # Older failure rows may omit the duplicated symbol/question fields.
+        legacy_failure = row["answer_status"] == "failed" and "symbol" not in payload and "question" not in payload
+        if not legacy_failure:
+            if payload.get("symbol") != row["symbol"] or payload.get("question") != row["question"]:
+                raise ResearchRecordCorrupt("research record outer fields conflict with payload")
+        if "answer_status" in payload and payload["answer_status"] != row["answer_status"]:
+            raise ResearchRecordCorrupt("research record answer status conflicts with payload")
+        answer = payload["answer"]
+        if "answer_status" in answer and answer["answer_status"] != row["answer_status"]:
+            raise ResearchRecordCorrupt("research record answer status conflicts with answer")
         return payload
     def _public(self, row, detail=False):
         item = {k: row[k] for k in _FIELDS}
@@ -95,6 +115,7 @@ class ResearchRecordStore:
         with self._lock:
             total = self._db.execute("SELECT COUNT(*) FROM research_records" + where, args).fetchone()[0]
             rows = self._db.execute("SELECT * FROM research_records" + where + " ORDER BY created_at DESC LIMIT ? OFFSET ?", args + (limit, offset)).fetchall()
+        for row in rows: self._verify(row)
         return {"items": [self._public(r) for r in rows], "total": total, "limit": limit, "offset": offset}
     def get(self, record_id: str):
         with self._lock:
