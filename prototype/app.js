@@ -31,6 +31,7 @@
   }
 
   function render(content, view = 'home', title = '搜索与分析') {
+    if (currentView === 'history' && view !== 'history') recordDetailRequest += 1;
     currentView = view;
     setPageMeta(view, title);
     app.innerHTML = `<div class="page-view">${content}</div>`;
@@ -349,11 +350,23 @@
     </article>`;
   }
 
+  function recordWindowCard(item, evidenceId, referenced) {
+    const source = safeSecUrl(item.source_url);
+    const accession = item.accession_number || '未提供';
+    return `<article class="card record-window ${referenced ? 'record-window-referenced' : ''}" data-evidence-id="${escapeHtml(evidenceId)}">
+      <div class="evidence-result-head"><span class="tag">${escapeHtml(evidenceId)}</span><strong>${escapeHtml(item.symbol || '未知证券')} · ${escapeHtml(item.company_name || '公司未提供')}</strong><span class="muted">${escapeHtml(item.form || '表单未提供')} · ${escapeHtml(item.filing_date || '日期未提供')}</span></div>
+      <p class="small muted">${referenced ? '本段引用' : '其他入模证据'} · Accession：${escapeHtml(accession)}</p>
+      <p class="evidence-preview">${escapeHtml(item.evidence_excerpt || '实际入模窗口未保存')}</p>
+      <p class="small">${source ? `<a href="${escapeHtml(source)}" target="_blank" rel="noopener noreferrer">SEC 原始文件 ↗</a>` : '来源链接未通过校验'}</p>
+    </article>`;
+  }
+
   function recordStatus(record) {
     return `<span class="record-status">保存：${escapeHtml(statusLabel(record.save_status))} · 审阅：${escapeHtml(statusLabel(record.review_status || 'unreviewed'))}</span>`;
   }
 
   async function researchRecords() {
+    const requestId = ++recordDetailRequest;
     render('<div class="panel"><h2>正在读取研究记录…</h2><p class="muted">仅读取本地已保存记录，不会重新检索或调用模型。</p></div>', 'history', '研究记录');
     let limit = 10;
     let offset = 0;
@@ -362,6 +375,7 @@
       const query = new URLSearchParams({ limit: String(limit), offset: String(offset) });
       if (symbol) query.set('symbol', symbol);
       const response = await fetch(`/api/research-records?${query.toString()}`);
+      if (requestId !== recordDetailRequest) return;
       if (!response.ok) throw new Error('研究记录暂时不可用。');
       const payload = await response.json();
       const items = Array.isArray(payload.items) ? payload.items : [];
@@ -372,26 +386,72 @@
       document.querySelector('#records-next').addEventListener('click', () => { offset += limit; load(); });
       document.querySelectorAll('.record-row').forEach((button) => button.addEventListener('click', () => researchRecordDetail(button.dataset.recordId)));
     };
-    try { await load(); } catch (_) { render('<div class="panel"><h2>研究记录不可用</h2><p class="muted">无法读取本地保存记录；不会自动重新生成回答。</p></div>', 'history', '研究记录'); }
+    try { await load(); } catch (_) { if (requestId !== recordDetailRequest) return; render('<div class="panel"><h2>研究记录不可用</h2><p class="muted">无法读取本地保存记录；不会自动重新生成回答。</p></div>', 'history', '研究记录'); }
   }
 
+  let recordDetailRequest = 0;
   async function researchRecordDetail(recordId) {
+    const requestId = ++recordDetailRequest;
     render('<div class="panel"><h2>正在读取研究记录…</h2><p class="muted">不会重新检索或调用模型。</p></div>', 'history', '研究记录详情');
     try {
       const response = await fetch(`/api/research-records/${encodeURIComponent(recordId)}`);
       if (!response.ok) throw new Error('记录不存在或读取失败。');
       const record = await response.json();
-      const evidence = Array.isArray(record.evidence) ? record.evidence : [];
+      if (requestId !== recordDetailRequest) return;
+      const savedEvidence = Array.isArray(record.evidence) ? record.evidence : [];
+      const evidence = savedEvidence;
       const citations = Array.isArray(record.citations) ? record.citations : [];
+      const sourceById = new Map();
+      savedEvidence.concat(citations).forEach((item) => {
+        if (!item || !item.evidence_id || sourceById.has(item.evidence_id)) return;
+        sourceById.set(item.evidence_id, item);
+      });
+      const packedEvidence = (Array.isArray(record.packed_evidence) ? record.packed_evidence : []).map((item) => {
+        const source = sourceById.get(item.evidence_id);
+        if (!source || source.accession_number !== item.accession_number || (source.chunk_id && item.chunk_id && source.chunk_id !== item.chunk_id)) return item;
+        return { ...item, source_url: source.source_url || '', chunk_id: item.chunk_id || source.chunk_id || '' };
+      });
       const answer = record.answer && typeof record.answer === 'object' ? record.answer : {};
       const answerText = answer.direct_answer?.text || answer.text || '未保存可展示的回答。';
-      const citationButtons = (answer.direct_answer?.evidence_ids || []).map((id) => `<button type="button" class="record-citation" data-evidence-target="${escapeHtml(id)}">[${escapeHtml(id)}]</button>`).join('');
       const keyPoints = Array.isArray(answer.key_points) ? answer.key_points : [];
-      const pointMarkup = keyPoints.map((point) => `<li>${escapeHtml(point.text || point)} ${(point.evidence_ids || []).map((id) => `<button type="button" class="record-citation" data-evidence-target="${escapeHtml(id)}">[${escapeHtml(id)}]</button>`).join('')}</li>`).join('');
-      render(`<section class="panel record-detail"><div class="section-title"><div><span class="tag">${escapeHtml(record.symbol || '未知证券')} · 研究记录</span><h2>${escapeHtml(record.question || '问题未提供')}</h2></div><button type="button" id="records-back">返回列表</button></div><p class="muted">记录 ID：${escapeHtml(record.record_id || recordId)} · 创建时间：${escapeHtml(record.created_at || '未提供')}</p><div class="notice"><b>事实内容尚未人工核验。</b> ${recordStatus(record)} · 数据截止：${escapeHtml(record.data_as_of || record.filters?.as_of || '未提供')}</div><h3>当时回答</h3><p class="record-answer">${escapeHtml(answerText)} ${citationButtons}</p>${pointMarkup ? `<h3>关键要点</h3><ul>${pointMarkup}</ul>` : ''}<h3>保存证据（${escapeHtml(evidence.length)} 条）</h3><div class="evidence-list">${evidence.length ? evidence.map(recordEvidenceCard).join('') : '<div class="notice">该记录没有保存证据，无法验证回答。</div>'}</div></section>`, 'history', '研究记录详情');
+      const packedById = new Map(packedEvidence.map((item) => [item.evidence_id, item]));
+      const allIds = packedEvidence.map((item) => item.evidence_id).filter(Boolean);
+      const segment = (label, text, refs, index) => {
+        const ids = Array.isArray(refs) ? refs : [];
+        const missing = ids.filter((id) => !packedById.has(id));
+        const buttons = ids.map((id) => `<button type="button" class="record-citation" data-evidence-target="${escapeHtml(id)}">[${escapeHtml(id)}]</button>`).join('');
+        return `<article class="record-segment${index === 'direct' ? ' active' : ''}" data-segment-index="${index}"><div class="record-segment-head"><h4>${escapeHtml(label)}</h4><button type="button" class="record-compare-button${index === 'direct' ? ' active' : ''}" data-segment-index="${index}" aria-pressed="${index === 'direct' ? 'true' : 'false'}">核对引用</button></div><p class="record-segment-text">${escapeHtml(text || '未保存可展示的内容。')} ${buttons}</p>${missing.length ? `<p class="small record-missing">引用目标缺失：${escapeHtml(missing.join(', '))}</p>` : ''}</article>`;
+      };
+      const segments = [segment('直接回答', answerText, answer.direct_answer?.evidence_ids, 'direct')].concat(keyPoints.map((point, index) => segment(`关键要点 ${index + 1}`, point && typeof point === 'object' ? point.text : point, point && typeof point === 'object' ? point.evidence_ids : [], `point-${index}`)));
+      const firstRefs = Array.isArray(answer.direct_answer?.evidence_ids) ? answer.direct_answer.evidence_ids : [];
+      const renderComparison = (refs, label, selectedText) => {
+        const refSet = new Set(refs || []);
+        const shown = packedEvidence.filter((item) => refSet.has(item.evidence_id));
+        const rest = packedEvidence.filter((item) => !refSet.has(item.evidence_id));
+        const files = new Set(shown.map((item) => item.accession_number).filter(Boolean)).size;
+        const missingFileCount = shown.filter((item) => !item.accession_number).length;
+        const missing = (refs || []).filter((id) => !packedById.has(id));
+        const citationButtons = (refs || []).map((id) => `<button type="button" class="record-citation" data-evidence-target="${escapeHtml(id)}">[${escapeHtml(id)}]</button>`).join('');
+        return `<section class="record-comparison" aria-live="polite"><div class="record-comparison-head"><div><span class="tag">回答—证据对照</span><h3>${escapeHtml(label)}</h3></div><span class="small muted">${shown.length} 个引用窗口 · ${files} 份不同文件${missingFileCount ? ` · ${missingFileCount} 个文件未提供` : ''}</span></div><p class="notice">引用关联不等于事实支持，请核对原文。当前为只读对照，尚未完成人工核验。</p><div class="record-comparison-grid"><div class="record-compare-answer"><h4>选中的回答原文</h4><p class="record-segment-text">${escapeHtml(selectedText || '未保存可展示的内容。')} ${citationButtons}</p></div><div><h4>该段全部引用窗口</h4>${shown.length ? shown.map((item) => recordWindowCard(item, item.evidence_id, true)).join('') : '<div class="notice">本段没有可用引用窗口。</div>'}<details class="record-other-evidence"><summary>查看其他入模证据（${escapeHtml(rest.length)}）</summary>${rest.length ? rest.map((item) => recordWindowCard(item, item.evidence_id, false)).join('') : '<div class="notice">没有其他入模证据。</div>'}</details></div></div><p class="record-source-count">本段引用：${shown.length} 个窗口；其他入模证据：${rest.length} 个窗口。${missing.length ? `缺失引用目标：${escapeHtml(missing.join(', '))}。` : ''}</p></section>`;
+      };
+      const initialComparison = renderComparison(firstRefs, '直接回答', answerText);
+      render(`<section class="panel record-detail"><div class="section-title"><div><span class="tag">${escapeHtml(record.symbol || '未知证券')} · 研究记录</span><h2>${escapeHtml(record.question || '问题未提供')}</h2></div><button type="button" id="records-back">返回列表</button></div><p class="muted">记录 ID：${escapeHtml(record.record_id || recordId)} · 创建时间：${escapeHtml(record.created_at || '未提供')}</p><div class="notice"><b>事实内容尚未人工核验。</b> ${recordStatus(record)} · 数据截止：${escapeHtml(record.data_as_of || record.filters?.as_of || '未提供')}</div><h3>当时回答</h3><div class="record-segments">${segments.join('')}</div><div id="record-comparison">${initialComparison}</div><details class="record-all-evidence"><summary>查看全部实际入模窗口（${escapeHtml(allIds.length)}）</summary><div class="evidence-list">${allIds.length ? packedEvidence.map((item) => recordWindowCard(item, item.evidence_id, firstRefs.includes(item.evidence_id))).join('') : '<div class="notice">该记录没有保存实际入模窗口。</div>'}</div></details><h3>保存证据定位</h3><div class="evidence-list">${evidence.length ? evidence.map(recordEvidenceCard).join('') : '<div class="notice">该记录没有保存证据，无法验证回答。</div>'}</div></section>`, 'history', '研究记录详情');
       document.querySelector('#records-back').addEventListener('click', researchRecords);
+      document.querySelectorAll('.record-compare-button').forEach((button) => button.addEventListener('click', () => {
+        const index = button.dataset.segmentIndex;
+        const item = index === 'direct' ? {text: answerText, evidence_ids: answer.direct_answer?.evidence_ids} : keyPoints[Number(index.replace('point-', ''))] || {};
+        document.querySelectorAll('.record-compare-button').forEach((other) => { other.setAttribute('aria-pressed', String(other === button)); other.classList.toggle('active', other === button); });
+        document.querySelectorAll('.record-segment').forEach((segmentNode) => segmentNode.classList.toggle('active', segmentNode.dataset.segmentIndex === index));
+        document.querySelector('#record-comparison').innerHTML = renderComparison(Array.isArray(item.evidence_ids) ? item.evidence_ids : [], index === 'direct' ? '直接回答' : `关键要点 ${Number(index.replace('point-', '')) + 1}`, item.text);
+      }));
       document.querySelectorAll('.record-citation').forEach((button) => button.addEventListener('click', () => { const target = Array.from(document.querySelectorAll('[data-evidence-id]')).find((item) => item.dataset.evidenceId === button.dataset.evidenceTarget); if (target) { target.scrollIntoView({ behavior: 'smooth', block: 'center' }); target.classList.add('citation-highlight'); window.setTimeout(() => target.classList.remove('citation-highlight'), 3000); } }));
-    } catch (_) { render('<div class="panel"><h2>研究记录损坏或不存在</h2><p class="muted">无法展示这条记录；不会自动重新生成。</p><button class="primary" id="records-back">返回研究记录</button></div>', 'history', '研究记录'); document.querySelector('#records-back').addEventListener('click', researchRecords); }
+      document.querySelector('#record-comparison').addEventListener('click', (event) => {
+        const button = event.target.closest('.record-citation');
+        if (!button) return;
+        const target = Array.from(document.querySelectorAll('[data-evidence-id]')).find((item) => item.dataset.evidenceId === button.dataset.evidenceTarget);
+        if (target) { target.scrollIntoView({ behavior: 'smooth', block: 'center' }); target.classList.add('citation-highlight'); window.setTimeout(() => target.classList.remove('citation-highlight'), 3000); }
+      });
+    } catch (_) { if (requestId !== recordDetailRequest) return; render('<div class="panel"><h2>研究记录损坏或不存在</h2><p class="muted">无法展示这条记录；不会自动重新生成。</p><button class="primary" id="records-back">返回研究记录</button></div>', 'history', '研究记录'); document.querySelector('#records-back').addEventListener('click', researchRecords); }
   }
 
   function openModal(modalHeading, content) { modalTitle.textContent = modalHeading; modalBody.innerHTML = content; modal.classList.add('open'); modal.setAttribute('aria-hidden', 'false'); modal.querySelector('.close').focus(); }
